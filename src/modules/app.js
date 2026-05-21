@@ -26,6 +26,7 @@ function createPinFixApp() {
     toast: '',
     history: [],
     highlightedAnnotationId: '',
+    activeAnnotationId: '',
     editingAnnotationId: '',
     expandedSections: {
       hotkeys: false
@@ -52,6 +53,7 @@ function createPinFixApp() {
     onRun: (name) => runNamedAction(name),
     onDeleteAnnotation: (id) => deleteAnnotation(id),
     onDeleteMask: (id) => deleteMask(id),
+    onActivateAnnotation: (id) => activateAnnotation(id, true),
     onFocusAnnotation: (id) => focusAnnotation(id),
     onEditAnnotation: (id) => editAnnotation(id),
     onMaskAnnotation: (id) => maskAnnotation(id),
@@ -113,6 +115,8 @@ function createPinFixApp() {
     state.annotations = (pageData.annotations || []).map((annotation) => hydrateAnnotation(annotation));
     state.masks = (pageData.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = pageData.globalNote || '';
+    state.activeAnnotationId = '';
+    state.editingAnnotationId = '';
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
       ? pageData.pageSettings.globalNoteHeight
       : state.globalNoteHeight;
@@ -341,6 +345,7 @@ function createPinFixApp() {
     };
 
     state.annotations.push(annotation);
+    state.activeAnnotationId = annotation.id;
     state.editingAnnotationId = annotation.id;
     state.settings.notesVisible = true;
     clearCandidate();
@@ -388,19 +393,25 @@ function createPinFixApp() {
     }
   }
 
-  function editAnnotation(id) {
+  function activateAnnotation(id, editNow) {
     const annotation = state.annotations.find((item) => item.id === id);
     if (!annotation) {
       return;
     }
 
-    state.editingAnnotationId = id;
+    // Only one note panel should be open at a time, so dense annotations do not cover the page.
+    state.activeAnnotationId = id;
+    state.editingAnnotationId = editNow ? id : '';
     state.settings.notesVisible = true;
     state.activePopover = null;
     markAnnotationFocused(id);
     saveGlobalSettings();
     savePageData();
     render();
+  }
+
+  function editAnnotation(id) {
+    activateAnnotation(id, true);
   }
 
   function maskAnnotation(id) {
@@ -462,6 +473,9 @@ function createPinFixApp() {
   function deleteAnnotation(id) {
     takeHistorySnapshot();
     state.annotations = state.annotations.filter((item) => item.id !== id);
+    if (state.activeAnnotationId === id) {
+      state.activeAnnotationId = '';
+    }
     if (state.editingAnnotationId === id) {
       state.editingAnnotationId = '';
     }
@@ -489,6 +503,7 @@ function createPinFixApp() {
     state.annotations = [];
     state.masks = [];
     state.globalNote = '';
+    state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
@@ -521,6 +536,7 @@ function createPinFixApp() {
     state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = snapshot.globalNote;
+    state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
@@ -536,8 +552,12 @@ function createPinFixApp() {
 
     const top = Math.max(annotation.rect.pageTop - 120, 0);
     window.scrollTo({ top, behavior: 'smooth' });
+    state.activeAnnotationId = id;
+    state.settings.notesVisible = true;
     state.activePopover = null;
     markAnnotationFocused(id);
+    saveGlobalSettings();
+    savePageData();
     render();
     showToast('focusDone');
   }
@@ -553,6 +573,11 @@ function createPinFixApp() {
     } else {
       selector.disable();
       state.selectionMode = 'annotate';
+      if (!nextOpen) {
+        state.activeAnnotationId = '';
+        state.editingAnnotationId = '';
+        clearCandidate();
+      }
     }
 
     render();
@@ -745,6 +770,9 @@ function createPinFixApp() {
     }
     if (name === 'toggle-notes') {
       state.settings.notesVisible = !state.settings.notesVisible;
+      if (!state.settings.notesVisible) {
+        state.editingAnnotationId = '';
+      }
       saveGlobalSettings();
       savePageData();
       render();
@@ -814,6 +842,9 @@ function createPinFixApp() {
     if (withCommand && withShift && event.key.toLowerCase() === 'h') {
       event.preventDefault();
       state.settings.notesVisible = !state.settings.notesVisible;
+      if (!state.settings.notesVisible) {
+        state.editingAnnotationId = '';
+      }
       saveGlobalSettings();
       savePageData();
       render();

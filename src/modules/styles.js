@@ -275,12 +275,17 @@ function getPinFixStyles() {
 
 .pinfix-candidate-tools {
   position: absolute;
-  right: 8px;
-  top: 8px;
+  left: 50%;
+  top: 50%;
   display: flex;
-  gap: 4px;
+  gap: 6px;
   pointer-events: auto;
   z-index: 8;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(10px);
 }
 
 .pinfix-annotation-box {
@@ -289,6 +294,15 @@ function getPinFixStyles() {
   border-radius: 14px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
   pointer-events: none;
+}
+
+.pinfix-annotation-box.is-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pinfix-annotation-box.is-active {
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.62), 0 0 22px rgba(15, 118, 110, 0.28);
 }
 
 .pinfix-annotation-box.is-focused {
@@ -307,8 +321,27 @@ function getPinFixStyles() {
   pointer-events: none;
 }
 
-.pinfix-label.is-focused {
+.pinfix-label.is-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pinfix-label.is-focused,
+.pinfix-label.is-active {
   transform: scale(1.08);
+}
+
+.pinfix-label.has-missing-note::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ef233c;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.26);
 }
 
 .pinfix-mask {
@@ -329,18 +362,21 @@ function getPinFixStyles() {
 
 .pinfix-inline-tools {
   position: absolute;
-  right: 8px;
-  top: 8px;
   z-index: 6;
   display: flex;
-  gap: 4px;
+  gap: 6px;
   pointer-events: auto;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(10px);
 }
 
 .pinfix-candidate-tools button,
 .pinfix-inline-tools button {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -355,13 +391,23 @@ function getPinFixStyles() {
 }
 
 .pinfix-candidate-tools button {
-  background: rgba(15, 23, 42, 0.82);
+  background: rgba(15, 23, 42, 0.78);
 }
 
 .pinfix-annotation-tools {
-  right: auto;
-  top: auto;
   z-index: 7;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.96);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+}
+
+.pinfix-annotation-box:hover + .pinfix-annotation-tools,
+.pinfix-annotation-tools:hover,
+.pinfix-annotation-tools.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
 }
 
 .pinfix-candidate-tools .pinfix-icon,
@@ -408,13 +454,14 @@ function getPinFixStyles() {
 .pinfix-note-card {
   position: absolute;
   z-index: 25;
-  width: min(360px, calc(100vw - 40px));
-  border-radius: 12px;
-  padding: 8px;
+  width: min(320px, calc(100vw - 24px));
+  border-radius: 14px;
+  padding: 7px;
+  border-top-width: 2px;
 }
 
 .pinfix-note-card.is-focused {
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.78), 0 14px 32px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.24), 0 14px 28px rgba(15, 23, 42, 0.14);
 }
 
 .pinfix-note-card.is-dark,
@@ -432,12 +479,12 @@ function getPinFixStyles() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .pinfix-note-badge {
-  min-width: 26px;
-  height: 26px;
+  min-width: 24px;
+  height: 24px;
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -460,8 +507,8 @@ function getPinFixStyles() {
   color: inherit;
   font-size: 16px;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -481,8 +528,8 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-input {
-  min-height: 72px;
-  max-height: 220px;
+  min-height: 64px;
+  max-height: 190px;
 }
 
 .pinfix-note-summary {

@@ -1416,12 +1416,17 @@ function getPinFixStyles() {
 
 .pinfix-candidate-tools {
   position: absolute;
-  right: 8px;
-  top: 8px;
+  left: 50%;
+  top: 50%;
   display: flex;
-  gap: 4px;
+  gap: 6px;
   pointer-events: auto;
   z-index: 8;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(10px);
 }
 
 .pinfix-annotation-box {
@@ -1430,6 +1435,15 @@ function getPinFixStyles() {
   border-radius: 14px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
   pointer-events: none;
+}
+
+.pinfix-annotation-box.is-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pinfix-annotation-box.is-active {
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.62), 0 0 22px rgba(15, 118, 110, 0.28);
 }
 
 .pinfix-annotation-box.is-focused {
@@ -1448,8 +1462,27 @@ function getPinFixStyles() {
   pointer-events: none;
 }
 
-.pinfix-label.is-focused {
+.pinfix-label.is-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pinfix-label.is-focused,
+.pinfix-label.is-active {
   transform: scale(1.08);
+}
+
+.pinfix-label.has-missing-note::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ef233c;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.26);
 }
 
 .pinfix-mask {
@@ -1470,18 +1503,21 @@ function getPinFixStyles() {
 
 .pinfix-inline-tools {
   position: absolute;
-  right: 8px;
-  top: 8px;
   z-index: 6;
   display: flex;
-  gap: 4px;
+  gap: 6px;
   pointer-events: auto;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(10px);
 }
 
 .pinfix-candidate-tools button,
 .pinfix-inline-tools button {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -1496,13 +1532,23 @@ function getPinFixStyles() {
 }
 
 .pinfix-candidate-tools button {
-  background: rgba(15, 23, 42, 0.82);
+  background: rgba(15, 23, 42, 0.78);
 }
 
 .pinfix-annotation-tools {
-  right: auto;
-  top: auto;
   z-index: 7;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.96);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+}
+
+.pinfix-annotation-box:hover + .pinfix-annotation-tools,
+.pinfix-annotation-tools:hover,
+.pinfix-annotation-tools.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
 }
 
 .pinfix-candidate-tools .pinfix-icon,
@@ -1549,13 +1595,14 @@ function getPinFixStyles() {
 .pinfix-note-card {
   position: absolute;
   z-index: 25;
-  width: min(360px, calc(100vw - 40px));
-  border-radius: 12px;
-  padding: 8px;
+  width: min(320px, calc(100vw - 24px));
+  border-radius: 14px;
+  padding: 7px;
+  border-top-width: 2px;
 }
 
 .pinfix-note-card.is-focused {
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.78), 0 14px 32px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.24), 0 14px 28px rgba(15, 23, 42, 0.14);
 }
 
 .pinfix-note-card.is-dark,
@@ -1573,12 +1620,12 @@ function getPinFixStyles() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .pinfix-note-badge {
-  min-width: 26px;
-  height: 26px;
+  min-width: 24px;
+  height: 24px;
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -1601,8 +1648,8 @@ function getPinFixStyles() {
   color: inherit;
   font-size: 16px;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -1622,8 +1669,8 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-input {
-  min-height: 72px;
-  max-height: 220px;
+  min-height: 64px;
+  max-height: 190px;
 }
 
 .pinfix-note-summary {
@@ -1932,6 +1979,9 @@ function createUI(options) {
     if (action === 'candidate-pick') {
       options.onCandidatePick(actionTarget.dataset.kind);
     }
+    if (action === 'activate-annotation') {
+      options.onActivateAnnotation(actionTarget.dataset.id);
+    }
     if (action === 'focus-annotation') {
       options.onFocusAnnotation(actionTarget.dataset.id);
     }
@@ -1939,17 +1989,7 @@ function createUI(options) {
       options.onMaskAnnotation(actionTarget.dataset.id);
     }
     if (action === 'edit-annotation') {
-      const noteCard = actionTarget.closest('.pinfix-note-card');
-      if (noteCard) {
-        setCardExpanded(noteCard, true);
-        const input = noteCard.querySelector('.pinfix-note-input');
-        if (input) {
-          input.classList.remove('pinfix-hidden');
-          input.focus();
-        }
-      } else {
-        options.onEditAnnotation(actionTarget.dataset.id);
-      }
+      options.onEditAnnotation(actionTarget.dataset.id);
     }
   }
 
@@ -1963,6 +2003,7 @@ function createUI(options) {
       autoGrow(textarea, 220);
       options.onChangeNote(textarea.dataset.noteId, textarea.value, false);
       syncSummary(textarea);
+      syncMissingNoteState(textarea);
     }
 
     if (textarea.dataset.globalNote === 'true') {
@@ -1990,18 +2031,12 @@ function createUI(options) {
     }
   }
 
-  function handleMouseEnter(event) {
-    const card = event.target.closest('.pinfix-note-card');
-    if (card) {
-      setCardExpanded(card, true);
-    }
+  function handleMouseEnter() {
+    // Notes now use click-to-activate. Hover should not open or close editing UI.
   }
 
-  function handleMouseLeave(event) {
-    const card = event.target.closest('.pinfix-note-card');
-    if (card && !card.contains(document.activeElement)) {
-      setCardExpanded(card, false);
-    }
+  function handleMouseLeave() {
+    // Keep the active note stable while the user moves between the box, tools, and input.
   }
 
   function autoGrow(textarea, maxHeight) {
@@ -2014,6 +2049,14 @@ function createUI(options) {
     const summary = card ? card.querySelector('.pinfix-note-summary') : null;
     if (summary) {
       summary.textContent = summariseNote(textarea.value) || textarea.placeholder;
+    }
+  }
+
+  function syncMissingNoteState(textarea) {
+    const label = Array.from(root.querySelectorAll('.pinfix-label'))
+      .find((node) => node.dataset.id === textarea.dataset.noteId);
+    if (label) {
+      label.classList.toggle('has-missing-note', !textarea.value.trim());
     }
   }
 
@@ -2167,11 +2210,64 @@ function createUI(options) {
     };
   }
 
+  function getVisibleRect(rect) {
+    const bounds = getSafeViewportBounds();
+    const left = Math.max(rect.pageLeft, bounds.left);
+    const top = Math.max(rect.pageTop, bounds.top);
+    const right = Math.min(rect.pageLeft + rect.width, bounds.right);
+    const bottom = Math.min(rect.pageTop + rect.height, bounds.bottom);
+
+    if (right <= left || bottom <= top) {
+      return null;
+    }
+
+    return {
+      pageLeft: left,
+      pageTop: top,
+      width: right - left,
+      height: bottom - top
+    };
+  }
+
+  function getAnnotationRenderInfo(rect) {
+    const visibleRect = getVisibleRect(rect);
+    if (!visibleRect) {
+      return null;
+    }
+
+    // Saved annotations should scroll away naturally. This threshold hides
+    // tiny edge slivers instead of pulling their labels back into the viewport.
+    const minVisibleWidth = Math.min(24, Math.max(8, rect.width * 0.25));
+    const minVisibleHeight = Math.min(24, Math.max(8, rect.height * 0.25));
+    const visibleArea = visibleRect.width * visibleRect.height;
+    const totalArea = Math.max(rect.width * rect.height, 1);
+
+    if (
+      visibleRect.width < minVisibleWidth ||
+      visibleRect.height < minVisibleHeight ||
+      (visibleArea < 360 && visibleArea / totalArea < 0.08)
+    ) {
+      return null;
+    }
+
+    return { boxRect: rect, visibleRect };
+  }
+
   function getFloatingPosition(preferredLeft, preferredTop, width, height) {
     const bounds = getSafeViewportBounds();
     return {
       pageLeft: clamp(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
       pageTop: clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
+    };
+  }
+
+  function getNaturalFloatingPosition(preferredLeft, preferredTop, width, height, clampVertical) {
+    const bounds = getSafeViewportBounds();
+    return {
+      pageLeft: clamp(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
+      pageTop: clampVertical
+        ? clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
+        : preferredTop
     };
   }
 
@@ -2197,11 +2293,13 @@ function createUI(options) {
       candidate.style.width = `${Math.max(displayRect.width, 12)}px`;
       candidate.style.height = `${Math.max(displayRect.height, 12)}px`;
       const tools = candidate.querySelector('.pinfix-candidate-tools');
+      const toolWidth = 150;
+      const toolHeight = 36;
       const toolsPosition = getFloatingPosition(
-        displayRect.pageLeft + displayRect.width - 124 - 8,
-        displayRect.pageTop + 8,
-        124,
-        28
+        displayRect.pageLeft + displayRect.width / 2 - toolWidth / 2,
+        displayRect.pageTop + displayRect.height / 2 - toolHeight / 2,
+        toolWidth,
+        toolHeight
       );
       tools.style.left = `${toolsPosition.pageLeft - displayRect.pageLeft}px`;
       tools.style.top = `${toolsPosition.pageTop - displayRect.pageTop}px`;
@@ -2216,9 +2314,9 @@ function createUI(options) {
     });
 
     state.annotations.forEach((annotation) => {
-      renderAnnotationBox(annotation, state);
-      if (state.settings.notesVisible) {
-        renderAnnotationNote(annotation, state);
+      const renderInfo = renderAnnotationBox(annotation, state);
+      if (renderInfo && state.settings.notesVisible && state.activeAnnotationId === annotation.id) {
+        renderAnnotationNote(annotation, state, renderInfo);
       }
     });
   }
@@ -2229,27 +2327,44 @@ function createUI(options) {
     const labelSize = PINFIX_LABEL_SIZES[annotation.style.labelSize];
     const padding = PINFIX_BOX_PADDING_OPTIONS[annotation.style.boxPadding] || 0;
     const stroke = annotation.surfaceTone === 'dark' ? 'rgba(255,255,255,0.95)' : 'rgba(15,23,42,0.88)';
+    const isActive = annotation.id === state.activeAnnotationId;
     const isFocused = annotation.id === state.highlightedAnnotationId;
-    const boxRect = clampBoxRect(expandRect(annotation.rect, padding), 16, 16);
+    const canActivate = state.open && !state.captureHidden;
+    const boxRect = expandRect(annotation.rect, padding);
+    const renderInfo = getAnnotationRenderInfo(boxRect);
+    if (!renderInfo) {
+      return null;
+    }
 
     const box = document.createElement('div');
-    box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''}`;
+    box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''}`;
+    box.dataset.action = 'activate-annotation';
+    box.dataset.id = annotation.id;
     box.style.left = `${boxRect.pageLeft}px`;
     box.style.top = `${boxRect.pageTop}px`;
     box.style.width = `${Math.max(boxRect.width, 8)}px`;
     box.style.height = `${Math.max(boxRect.height, 8)}px`;
     box.style.border = `${lineWidth}px solid ${color}`;
-    box.style.boxShadow = `0 0 0 1px ${stroke} inset, 0 0 18px ${color}33`;
+    box.style.boxShadow = isFocused
+      ? `0 0 0 2px rgba(245, 158, 11, 0.9), 0 0 22px rgba(245, 158, 11, 0.38), 0 0 0 1px ${stroke} inset`
+      : `0 0 0 1px ${stroke} inset, 0 0 18px ${isActive ? `${color}55` : `${color}33`}`;
     overlayLayer.appendChild(box);
 
+    renderAnnotationTools(annotation, renderInfo, isActive);
+
     const label = document.createElement('div');
-    label.className = `pinfix-label ${isFocused ? 'is-focused' : ''}`;
+    const missingNote = !String(annotation.note || '').trim();
+    label.className = `pinfix-label ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''} ${missingNote ? 'has-missing-note' : ''}`;
+    label.dataset.action = 'activate-annotation';
+    label.dataset.id = annotation.id;
+    label.title = t('changeRequest');
     label.textContent = String(annotation.number);
-    const labelPosition = getFloatingPosition(
+    const labelPosition = getNaturalFloatingPosition(
       boxRect.pageLeft + boxRect.width - labelSize - 18,
       boxRect.pageTop - labelSize * 0.55,
       labelSize,
-      labelSize
+      labelSize,
+      boxRect.pageTop >= getSafeViewportBounds().top
     );
     label.style.left = `${labelPosition.pageLeft}px`;
     label.style.top = `${labelPosition.pageTop}px`;
@@ -2264,29 +2379,21 @@ function createUI(options) {
       label.style.boxShadow = `0 0 0 3px ${color} inset, 0 10px 22px rgba(15,23,42,0.22)`;
     }
     overlayLayer.appendChild(label);
-    renderAnnotationTools(annotation, boxRect, {
-      pageLeft: labelPosition.pageLeft,
-      pageTop: labelPosition.pageTop,
-      width: labelSize,
-      height: labelSize
-    });
+    return renderInfo;
   }
 
-  function renderAnnotationTools(annotation, boxRect, labelRect) {
-    const toolWidth = 92;
-    const toolHeight = 28;
-    let preferredLeft = boxRect.pageLeft + boxRect.width - toolWidth - 12;
-    const preferredTop = boxRect.pageTop + 8;
-    const labelOverlapsY = labelRect.pageTop + labelRect.height > preferredTop
-      && labelRect.pageTop < preferredTop + toolHeight;
-
-    if (labelOverlapsY && preferredLeft + toolWidth > labelRect.pageLeft - 6) {
-      preferredLeft = labelRect.pageLeft - toolWidth - 8;
-    }
-
-    const position = getFloatingPosition(preferredLeft, preferredTop, toolWidth, toolHeight);
+  function renderAnnotationTools(annotation, renderInfo, isActive) {
+    const toolWidth = 116;
+    const toolHeight = 36;
+    const visibleRect = renderInfo.visibleRect;
+    const position = getFloatingPosition(
+      visibleRect.pageLeft + visibleRect.width / 2 - toolWidth / 2,
+      visibleRect.pageTop + visibleRect.height / 2 - toolHeight / 2,
+      toolWidth,
+      toolHeight
+    );
     const tools = document.createElement('div');
-    tools.className = 'pinfix-inline-tools pinfix-annotation-tools';
+    tools.className = `pinfix-inline-tools pinfix-annotation-tools ${isActive ? 'is-active' : ''}`;
     tools.style.left = `${position.pageLeft}px`;
     tools.style.top = `${position.pageTop}px`;
     tools.innerHTML = `
@@ -2315,25 +2422,26 @@ function createUI(options) {
     overlayLayer.appendChild(element);
   }
 
-  function getNotePosition(annotation) {
-    const estimatedHeight = 128;
-    const cardWidth = Math.max(220, Math.min(360, window.innerWidth - 40));
-    const padding = PINFIX_BOX_PADDING_OPTIONS[annotation.style.boxPadding] || 0;
-    const boxRect = clampBoxRect(expandRect(annotation.rect, padding), 16, 16);
-    const defaultTop = boxRect.pageTop + boxRect.height + 10;
-    const viewportBottom = window.scrollY + window.innerHeight;
-    const shouldFlip = defaultTop + estimatedHeight > viewportBottom && boxRect.pageTop > window.scrollY + estimatedHeight;
+  function getNotePosition(renderInfo) {
+    const estimatedHeight = 122;
+    const cardWidth = Math.max(220, Math.min(320, window.innerWidth - viewportMargin * 2));
+    const boxRect = renderInfo.visibleRect;
+    const bounds = getSafeViewportBounds();
+    const defaultTop = boxRect.pageTop + boxRect.height;
+    const shouldFlip = defaultTop + estimatedHeight > bounds.bottom && boxRect.pageTop - estimatedHeight >= bounds.top;
     const rightAlignedLeft = boxRect.pageLeft + boxRect.width - cardWidth;
+    const preferredTop = shouldFlip ? boxRect.pageTop - estimatedHeight : defaultTop;
 
     return {
-      left: clamp(rightAlignedLeft, window.scrollX + 12, window.scrollX + window.innerWidth - cardWidth - 12),
-      top: shouldFlip ? boxRect.pageTop - estimatedHeight - 10 : defaultTop
+      left: clamp(rightAlignedLeft, bounds.left, Math.max(bounds.left, bounds.right - cardWidth)),
+      top: clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - estimatedHeight)),
+      width: cardWidth
     };
   }
 
-  function renderAnnotationNote(annotation, state) {
+  function renderAnnotationNote(annotation, state, renderInfo) {
     const color = PINFIX_COLOR_PRESETS[annotation.style.colorPreset].color;
-    const position = getNotePosition(annotation);
+    const position = getNotePosition(renderInfo);
     const summaryText = summariseNote(annotation.note) || t('noteMissingShort');
     const isEditing = annotation.id === state.editingAnnotationId;
     const card = document.createElement('div');
@@ -2341,12 +2449,13 @@ function createUI(options) {
     card.dataset.notesVisible = String(state.settings.notesVisible);
     card.style.left = `${position.left}px`;
     card.style.top = `${position.top}px`;
+    card.style.width = `${position.width}px`;
     card.style.borderColor = `${color}66`;
     card.innerHTML = `
       <div class="pinfix-note-head">
         <div class="pinfix-note-badge" style="background:${color}">${annotation.number}</div>
         <strong class="pinfix-note-title">${escapeHtml(t('changeRequest'))}</strong>
-        <button class="pinfix-note-delete" type="button" data-action="delete-annotation" data-id="${annotation.id}">&times;</button>
+        <button class="pinfix-note-delete" type="button" data-action="delete-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionDelete'))}">&times;</button>
       </div>
       <button class="pinfix-note-summary ${isEditing ? 'pinfix-hidden' : ''}" type="button" data-action="edit-annotation" data-id="${annotation.id}">${escapeHtml(summaryText)}</button>
       <textarea
@@ -2651,6 +2760,7 @@ function createPinFixApp() {
     toast: '',
     history: [],
     highlightedAnnotationId: '',
+    activeAnnotationId: '',
     editingAnnotationId: '',
     expandedSections: {
       hotkeys: false
@@ -2677,6 +2787,7 @@ function createPinFixApp() {
     onRun: (name) => runNamedAction(name),
     onDeleteAnnotation: (id) => deleteAnnotation(id),
     onDeleteMask: (id) => deleteMask(id),
+    onActivateAnnotation: (id) => activateAnnotation(id, true),
     onFocusAnnotation: (id) => focusAnnotation(id),
     onEditAnnotation: (id) => editAnnotation(id),
     onMaskAnnotation: (id) => maskAnnotation(id),
@@ -2738,6 +2849,8 @@ function createPinFixApp() {
     state.annotations = (pageData.annotations || []).map((annotation) => hydrateAnnotation(annotation));
     state.masks = (pageData.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = pageData.globalNote || '';
+    state.activeAnnotationId = '';
+    state.editingAnnotationId = '';
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
       ? pageData.pageSettings.globalNoteHeight
       : state.globalNoteHeight;
@@ -2966,6 +3079,7 @@ function createPinFixApp() {
     };
 
     state.annotations.push(annotation);
+    state.activeAnnotationId = annotation.id;
     state.editingAnnotationId = annotation.id;
     state.settings.notesVisible = true;
     clearCandidate();
@@ -3013,19 +3127,25 @@ function createPinFixApp() {
     }
   }
 
-  function editAnnotation(id) {
+  function activateAnnotation(id, editNow) {
     const annotation = state.annotations.find((item) => item.id === id);
     if (!annotation) {
       return;
     }
 
-    state.editingAnnotationId = id;
+    // Only one note panel should be open at a time, so dense annotations do not cover the page.
+    state.activeAnnotationId = id;
+    state.editingAnnotationId = editNow ? id : '';
     state.settings.notesVisible = true;
     state.activePopover = null;
     markAnnotationFocused(id);
     saveGlobalSettings();
     savePageData();
     render();
+  }
+
+  function editAnnotation(id) {
+    activateAnnotation(id, true);
   }
 
   function maskAnnotation(id) {
@@ -3087,6 +3207,9 @@ function createPinFixApp() {
   function deleteAnnotation(id) {
     takeHistorySnapshot();
     state.annotations = state.annotations.filter((item) => item.id !== id);
+    if (state.activeAnnotationId === id) {
+      state.activeAnnotationId = '';
+    }
     if (state.editingAnnotationId === id) {
       state.editingAnnotationId = '';
     }
@@ -3114,6 +3237,7 @@ function createPinFixApp() {
     state.annotations = [];
     state.masks = [];
     state.globalNote = '';
+    state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
@@ -3146,6 +3270,7 @@ function createPinFixApp() {
     state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = snapshot.globalNote;
+    state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
@@ -3161,8 +3286,12 @@ function createPinFixApp() {
 
     const top = Math.max(annotation.rect.pageTop - 120, 0);
     window.scrollTo({ top, behavior: 'smooth' });
+    state.activeAnnotationId = id;
+    state.settings.notesVisible = true;
     state.activePopover = null;
     markAnnotationFocused(id);
+    saveGlobalSettings();
+    savePageData();
     render();
     showToast('focusDone');
   }
@@ -3178,6 +3307,11 @@ function createPinFixApp() {
     } else {
       selector.disable();
       state.selectionMode = 'annotate';
+      if (!nextOpen) {
+        state.activeAnnotationId = '';
+        state.editingAnnotationId = '';
+        clearCandidate();
+      }
     }
 
     render();
@@ -3370,6 +3504,9 @@ function createPinFixApp() {
     }
     if (name === 'toggle-notes') {
       state.settings.notesVisible = !state.settings.notesVisible;
+      if (!state.settings.notesVisible) {
+        state.editingAnnotationId = '';
+      }
       saveGlobalSettings();
       savePageData();
       render();
@@ -3439,6 +3576,9 @@ function createPinFixApp() {
     if (withCommand && withShift && event.key.toLowerCase() === 'h') {
       event.preventDefault();
       state.settings.notesVisible = !state.settings.notesVisible;
+      if (!state.settings.notesVisible) {
+        state.editingAnnotationId = '';
+      }
       saveGlobalSettings();
       savePageData();
       render();
