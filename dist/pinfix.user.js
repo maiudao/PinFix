@@ -190,6 +190,8 @@ function createI18n() {
       notesOff: '隐藏备注',
       language: '语言',
       hotkeys: '快捷键',
+      expand: '展开',
+      collapse: '收起',
       reviewStatus: '导出前检查',
       reviewReady: '说明已写完整，可以直接导出',
       reviewMissing: '还有 {count} 个标注没写说明',
@@ -200,6 +202,7 @@ function createI18n() {
       globalNotesHint: '写业务逻辑、整体方向或无法绑定到单个编号的说明',
       notePlaceholder: '写这里要怎么改，刷新后会自动恢复',
       noteMissingShort: '未填写说明',
+      changeRequest: '修改要求',
       annotationExists: '这个模块已经标过了，已帮你定位过去',
       maskExists: '这个区域已经有遮挡了',
       styleColor: '颜色',
@@ -257,6 +260,12 @@ function createI18n() {
       privacyMasksCleared: '已清空遮挡',
       privacyHint: '导出时会保留这些遮挡，用来盖住敏感内容',
       maskLabel: '遮挡',
+      actionEditNote: '写修改要求',
+      actionMaskArea: '遮挡这个区域',
+      actionDelete: '删除',
+      actionShrinkMask: '缩小遮挡',
+      actionExpandMask: '扩大遮挡',
+      actionDeleteMask: '删除遮挡',
       emptyState: '还没有标注，先点“选择”再点击网页模块',
       pageTitle: '需要修改的页面',
       pageUrl: '页面地址',
@@ -298,6 +307,8 @@ function createI18n() {
       notesOff: 'Hide notes',
       language: 'Language',
       hotkeys: 'Hotkeys',
+      expand: 'Expand',
+      collapse: 'Collapse',
       reviewStatus: 'Export check',
       reviewReady: 'All annotations have notes. You can export now.',
       reviewMissing: '{count} annotations still need notes.',
@@ -308,6 +319,7 @@ function createI18n() {
       globalNotesHint: 'Use this for business context, whole-page direction, or notes not tied to one marker.',
       notePlaceholder: 'Describe what should change here. PinFix saves it automatically.',
       noteMissingShort: 'Missing note',
+      changeRequest: 'Change request',
       annotationExists: 'That area is already annotated. PinFix moved to it.',
       maskExists: 'This area is already masked',
       styleColor: 'Color',
@@ -365,6 +377,12 @@ function createI18n() {
       privacyMasksCleared: 'Privacy masks cleared',
       privacyHint: 'These masks stay in screenshots and image exports to hide sensitive data.',
       maskLabel: 'MASK',
+      actionEditNote: 'Write change request',
+      actionMaskArea: 'Mask this area',
+      actionDelete: 'Delete',
+      actionShrinkMask: 'Shrink mask',
+      actionExpandMask: 'Expand mask',
+      actionDeleteMask: 'Delete mask',
       emptyState: 'No annotations yet. Click Select and pick a page area.',
       pageTitle: 'Page to update',
       pageUrl: 'Page URL',
@@ -487,6 +505,7 @@ function createSelectorManager(options) {
   let currentChain = [];
   let currentIndex = 0;
   let lastPoint = null;
+  let manualIndexLocked = false;
 
   function isIgnoredElement(element) {
     return !element || options.isIgnored(element);
@@ -503,6 +522,12 @@ function createSelectorManager(options) {
       style.visibility !== 'hidden' &&
       Number(style.opacity || '1') > 0
     );
+  }
+
+  function hasVisibleBoxStyle(style) {
+    const hasBackground = style.backgroundColor !== 'transparent'
+      && style.backgroundColor !== 'rgba(0, 0, 0, 0)';
+    return style.borderStyle !== 'none' || hasBackground || style.backgroundImage !== 'none';
   }
 
   // The selector prefers blocks that look like real modules instead of
@@ -525,7 +550,7 @@ function createSelectorManager(options) {
     const viewportArea = window.innerWidth * window.innerHeight;
     const style = window.getComputedStyle(element);
     const interactive = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'].includes(element.tagName);
-    const hasVisualBox = style.borderStyle !== 'none' || style.backgroundColor !== 'rgba(0, 0, 0, 0)';
+    const hasVisualBox = hasVisibleBoxStyle(style);
     const looksInline = style.display === 'inline' && !interactive;
 
     if (rect.width > window.innerWidth * 0.98 && rect.height > window.innerHeight * 0.98) {
@@ -553,24 +578,76 @@ function createSelectorManager(options) {
     return chain;
   }
 
+  function getElementArea(element) {
+    const rect = element.getBoundingClientRect();
+    return rect.width * rect.height;
+  }
+
+  function isBroadContainer(element) {
+    const rect = element.getBoundingClientRect();
+    const viewportArea = window.innerWidth * window.innerHeight;
+    const area = rect.width * rect.height;
+
+    return (
+      area > viewportArea * 0.68 ||
+      (rect.width > window.innerWidth * 0.92 && rect.height > window.innerHeight * 0.72)
+    );
+  }
+
+  function scoreDefaultCandidate(element, index) {
+    const rect = element.getBoundingClientRect();
+    const area = getElementArea(element);
+    const viewportArea = window.innerWidth * window.innerHeight;
+    const tagName = element.tagName;
+    const style = window.getComputedStyle(element);
+    const interactive = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'].includes(tagName);
+    const hasVisualBox = hasVisibleBoxStyle(style);
+    const containerLike = element.children.length > 1 && ['DIV', 'SECTION', 'ARTICLE', 'LI'].includes(tagName);
+    let score = index * 8;
+
+    if (interactive) {
+      score -= 18;
+    }
+
+    if (area < 1200 || rect.width < 20 || rect.height < 20) {
+      score += interactive || hasVisualBox ? 6 : 36;
+    }
+
+    if (hasVisualBox) {
+      score -= 10;
+    }
+
+    if (containerLike && area > 4200) {
+      score += 16;
+    }
+
+    if (area > viewportArea * 0.45) {
+      score += 80;
+    }
+
+    if (isBroadContainer(element)) {
+      score += 160;
+    }
+
+    if (['MAIN', 'HEADER', 'FOOTER'].includes(tagName)) {
+      score += 80;
+    }
+
+    if (style.display === 'inline' && !interactive) {
+      score += 24;
+    }
+
+    return score;
+  }
+
   function findDefaultIndex(chain) {
     if (!chain.length) {
       return 0;
     }
 
-    const viewportArea = window.innerWidth * window.innerHeight;
-
-    for (let index = 0; index < chain.length; index += 1) {
-      const rect = chain[index].getBoundingClientRect();
-      const area = rect.width * rect.height;
-      const goodArea = area > 1600 && area < viewportArea * 0.65;
-      const balancedShape = rect.width > 24 && rect.height > 24;
-      if (goodArea && balancedShape) {
-        return index;
-      }
-    }
-
-    return 0;
+    return chain
+      .map((element, index) => ({ index, score: scoreDefaultCandidate(element, index) }))
+      .sort((left, right) => left.score - right.score)[0].index;
   }
 
   function notifyCandidate() {
@@ -602,9 +679,10 @@ function createSelectorManager(options) {
     const chain = collectChain(target);
     const currentElement = currentChain[currentIndex] || null;
     currentChain = chain;
-    if (currentElement && chain.includes(currentElement)) {
+    if (manualIndexLocked && currentElement && chain.includes(currentElement) && !isBroadContainer(currentElement)) {
       currentIndex = chain.indexOf(currentElement);
     } else {
+      manualIndexLocked = false;
       currentIndex = findDefaultIndex(chain);
     }
     notifyCandidate();
@@ -629,6 +707,7 @@ function createSelectorManager(options) {
     event.stopPropagation();
     event.stopImmediatePropagation();
     options.onSelect(element);
+    manualIndexLocked = false;
   }
 
   function adjustSelection(direction) {
@@ -637,6 +716,7 @@ function createSelectorManager(options) {
     }
 
     currentIndex = clamp(currentIndex + direction, 0, currentChain.length - 1);
+    manualIndexLocked = true;
     notifyCandidate();
   }
 
@@ -679,6 +759,7 @@ function createSelectorManager(options) {
       enabled = false;
       currentChain = [];
       currentIndex = 0;
+      manualIndexLocked = false;
       window.removeEventListener('pointermove', handlePointerMove, true);
       window.removeEventListener('click', handleClick, true);
       window.removeEventListener('keydown', handleKeydown, true);
@@ -1102,7 +1183,6 @@ function getPinFixStyles() {
   pointer-events: none;
 }
 
-.pinfix-launcher,
 .pinfix-tool-button {
   border: 1px solid rgba(15, 118, 110, 0.18);
   background: rgba(255, 255, 255, 0.92);
@@ -1112,22 +1192,52 @@ function getPinFixStyles() {
 }
 
 .pinfix-launcher {
-  width: 44px;
-  height: 56px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  font-size: 20px;
-  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+  position: relative;
+  transition: transform 160ms ease;
+}
+
+.pinfix-launcher::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.pinfix-launcher::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: #0f766e;
 }
 
 .pinfix-toolbar {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px;
+  padding: 12px 8px 8px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(15, 118, 110, 0.18);
@@ -1146,14 +1256,69 @@ function getPinFixStyles() {
   transition: transform 160ms ease, background 160ms ease, color 160ms ease;
 }
 
-.pinfix-launcher:hover,
+.pinfix-toolbar-close {
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0f766e;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.92);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  z-index: 2;
+}
+
+.pinfix-icon {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pinfix-icon circle {
+  fill: currentColor;
+  stroke: none;
+}
+
+.pinfix-toolbar-close .pinfix-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.pinfix-toolbar:hover .pinfix-toolbar-close,
+.pinfix-toolbar:focus-within .pinfix-toolbar-close {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+.pinfix-launcher:hover {
+  transform: translateY(-1px);
+}
+
+.pinfix-launcher:hover::before {
+  background: rgba(222, 247, 244, 0.96);
+}
+
 .pinfix-tool-button:hover {
   transform: translateY(-1px);
   background: rgba(222, 247, 244, 0.96);
 }
 
-.pinfix-tool-button.is-active,
-.pinfix-launcher.is-active {
+.pinfix-tool-button.is-active {
   background: #0f766e;
   color: #ffffff;
 }
@@ -1187,6 +1352,22 @@ function getPinFixStyles() {
   font-size: 12px;
   color: #64748b;
   margin-bottom: 8px;
+}
+
+.pinfix-section-toggle {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.92);
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .pinfix-chip-row,
@@ -1230,29 +1411,25 @@ function getPinFixStyles() {
   border-radius: 12px;
   background: rgba(15, 118, 110, 0.08);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
-}
-
-.pinfix-tip {
-  position: absolute;
-  left: 0;
-  top: -30px;
-  display: flex;
-  gap: 6px;
   pointer-events: none;
 }
 
-.pinfix-tip span {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.82);
-  color: #f8fafc;
-  font-size: 12px;
+.pinfix-candidate-tools {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+  z-index: 8;
 }
 
 .pinfix-annotation-box {
   position: absolute;
+  z-index: 2;
   border-radius: 14px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
+  pointer-events: none;
 }
 
 .pinfix-annotation-box.is-focused {
@@ -1261,12 +1438,14 @@ function getPinFixStyles() {
 
 .pinfix-label {
   position: absolute;
+  z-index: 5;
   display: grid;
   place-items: center;
   font-weight: 700;
   color: #ffffff;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.24);
   text-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+  pointer-events: none;
 }
 
 .pinfix-label.is-focused {
@@ -1275,6 +1454,7 @@ function getPinFixStyles() {
 
 .pinfix-mask {
   position: absolute;
+  z-index: 2;
   border-radius: 12px;
   background:
     repeating-linear-gradient(
@@ -1285,6 +1465,59 @@ function getPinFixStyles() {
     rgba(15, 23, 42, 0.94);
   border: 2px solid rgba(255, 255, 255, 0.4);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.24);
+  pointer-events: none;
+}
+
+.pinfix-inline-tools {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 6;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.pinfix-candidate-tools button,
+.pinfix-inline-tools button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.76);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.pinfix-candidate-tools button {
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.pinfix-annotation-tools {
+  right: auto;
+  top: auto;
+  z-index: 7;
+}
+
+.pinfix-candidate-tools .pinfix-icon,
+.pinfix-inline-tools .pinfix-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.pinfix-candidate-tools button:hover,
+.pinfix-inline-tools button:hover {
+  background: #0f766e;
+}
+
+.pinfix-mask-tools button {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .pinfix-mask-label {
@@ -1298,21 +1531,6 @@ function getPinFixStyles() {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
-}
-
-.pinfix-mask-delete {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  border: 0;
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-  font-size: 14px;
-  cursor: pointer;
-  pointer-events: auto;
 }
 
 .pinfix-note-card,
@@ -1369,12 +1587,26 @@ function getPinFixStyles() {
   font-weight: 700;
 }
 
+.pinfix-note-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.72;
+}
+
 .pinfix-note-delete {
   border: 0;
   background: transparent;
   color: inherit;
   font-size: 16px;
   cursor: pointer;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
 .pinfix-note-input,
@@ -1488,7 +1720,7 @@ function getPinFixStyles() {
 .pinfix-hidden-for-capture .pinfix-global-panel,
 .pinfix-hidden-for-capture .pinfix-candidate,
 .pinfix-hidden-for-capture .pinfix-toast,
-.pinfix-hidden-for-capture .pinfix-mask-delete {
+.pinfix-hidden-for-capture .pinfix-inline-tools {
   display: none !important;
 }
 
@@ -1545,6 +1777,7 @@ function createUI(options) {
   let countdown = null;
   let candidate = null;
   let resizeCleanup = null;
+  const viewportMargin = 12;
 
   function getLanguage() {
     return options.getLanguage();
@@ -1552,6 +1785,23 @@ function createUI(options) {
 
   function t(key) {
     return options.t(getLanguage(), key);
+  }
+
+  function iconSvg(name) {
+    const icons = {
+      select: '<path d="M5 4l7 16 2-7 7-2L5 4z"></path>',
+      style: '<path d="M4 14l6-6 6 6-6 6-6-6z"></path><path d="M14 4l6 6"></path>',
+      capture: '<rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M8 7l1.5-2h5L16 7"></path><circle cx="12" cy="13" r="3"></circle>',
+      copy: '<rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path>',
+      more: '<circle cx="6" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="18" cy="12" r="1.7"></circle>',
+      edit: '<path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z"></path><path d="M13 7l4 4"></path>',
+      mask: '<rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M8 18L18 8"></path><path d="M6 12l6-6"></path><path d="M12 18l6-6"></path>',
+      minus: '<path d="M6 12h12"></path>',
+      plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+      close: '<path d="M6 6l12 12"></path><path d="M18 6L6 18"></path>'
+    };
+
+    return `<svg class="pinfix-icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || ''}</svg>`;
   }
 
   function mount() {
@@ -1569,7 +1819,7 @@ function createUI(options) {
     root.dataset.pinfixIgnore = 'true';
     root.innerHTML = `
       <div class="pinfix-chrome" data-html2canvas-ignore="true">
-        <button class="pinfix-launcher" type="button" data-action="toggle-open">PF</button>
+        <button class="pinfix-launcher" type="button" data-action="toggle-open"></button>
         <div class="pinfix-toolbar pinfix-hidden"></div>
       </div>
       <div class="pinfix-overlay-layer"></div>
@@ -1593,12 +1843,6 @@ function createUI(options) {
     countdown = root.querySelector('.pinfix-countdown');
     candidate = document.createElement('div');
     candidate.className = 'pinfix-candidate pinfix-hidden';
-    candidate.innerHTML = `
-      <div class="pinfix-tip">
-        <span>[ ${t('tipShrink')}</span>
-        <span>] ${t('tipExpand')}</span>
-      </div>
-    `;
     overlayLayer.appendChild(candidate);
 
     root.addEventListener('click', handleClick);
@@ -1670,14 +1914,29 @@ function createUI(options) {
     if (action === 'run') {
       options.onRun(actionTarget.dataset.name, actionTarget.dataset.arg || '');
     }
+    if (action === 'toggle-section') {
+      options.onToggleSection(actionTarget.dataset.section);
+    }
     if (action === 'delete-annotation') {
       options.onDeleteAnnotation(actionTarget.dataset.id);
     }
     if (action === 'delete-mask') {
       options.onDeleteMask(actionTarget.dataset.id);
     }
+    if (action === 'adjust-mask') {
+      options.onAdjustMask(actionTarget.dataset.id, actionTarget.dataset.delta);
+    }
+    if (action === 'candidate-adjust') {
+      options.onCandidateAdjust(actionTarget.dataset.direction);
+    }
+    if (action === 'candidate-pick') {
+      options.onCandidatePick(actionTarget.dataset.kind);
+    }
     if (action === 'focus-annotation') {
       options.onFocusAnnotation(actionTarget.dataset.id);
+    }
+    if (action === 'mask-annotation') {
+      options.onMaskAnnotation(actionTarget.dataset.id);
     }
     if (action === 'edit-annotation') {
       const noteCard = actionTarget.closest('.pinfix-note-card');
@@ -1688,6 +1947,8 @@ function createUI(options) {
           input.classList.remove('pinfix-hidden');
           input.focus();
         }
+      } else {
+        options.onEditAnnotation(actionTarget.dataset.id);
       }
     }
   }
@@ -1787,25 +2048,55 @@ function createUI(options) {
     renderGlobalNotes(state);
     renderToast(state);
     renderCountdown(state);
+    focusEditingNote(state);
+  }
+
+  function focusEditingNote(state) {
+    if (!state.editingAnnotationId) {
+      return;
+    }
+
+    if (document.activeElement && document.activeElement.dataset
+      && document.activeElement.dataset.noteId === state.editingAnnotationId) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const input = Array.from(root.querySelectorAll('[data-note-id]'))
+        .find((node) => node.dataset.noteId === state.editingAnnotationId);
+      if (input) {
+        input.focus();
+        autoGrow(input, 220);
+      }
+    });
   }
 
   function renderChrome(state) {
     const launcher = root.querySelector('.pinfix-launcher');
     const toolbar = root.querySelector('.pinfix-toolbar');
     const buttons = [
-      { tool: 'select', label: t('select'), icon: '◎' },
-      { tool: 'style', label: t('style'), icon: '◧' },
-      { tool: 'capture', label: t('capture'), icon: '▣' },
-      { tool: 'copy', label: t('copy'), icon: '⎘' },
-      { tool: 'more', label: t('more'), icon: '⋯' }
+      { tool: 'select', label: t('select'), icon: iconSvg('select') },
+      { tool: 'style', label: t('style'), icon: iconSvg('style') },
+      { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
+      { tool: 'copy', label: t('copy'), icon: iconSvg('copy') },
+      { tool: 'more', label: t('more'), icon: iconSvg('more') }
     ];
 
-    launcher.classList.toggle('is-active', state.open);
-    launcher.title = state.open ? t('launcherClose') : t('launcherOpen');
-    launcher.textContent = 'PF';
+    launcher.classList.toggle('pinfix-hidden', state.open);
+    launcher.title = t('launcherOpen');
+    launcher.setAttribute('aria-label', t('launcherOpen'));
+    launcher.textContent = '';
 
     toolbar.classList.toggle('pinfix-hidden', !state.open);
-    toolbar.innerHTML = buttons
+    toolbar.innerHTML = `
+      <button
+        class="pinfix-toolbar-close"
+        type="button"
+        title="${escapeHtml(t('launcherClose'))}"
+        data-action="run"
+        data-name="close-pinfix"
+      >${iconSvg('close')}</button>
+      ${buttons
       .map((button) => {
         const active = button.tool === state.tool || button.tool === state.activePopover;
         return `
@@ -1818,7 +2109,8 @@ function createUI(options) {
           >${button.icon}</button>
         `;
       })
-      .join('');
+      .join('')}
+    `;
   }
 
   function renderPopover(state) {
@@ -1838,14 +2130,59 @@ function createUI(options) {
     popover.style.top = `${nextTop}px`;
   }
 
+  function getSafeViewportBounds() {
+    return {
+      left: window.scrollX + viewportMargin,
+      top: window.scrollY + viewportMargin,
+      right: window.scrollX + window.innerWidth - viewportMargin,
+      bottom: window.scrollY + window.innerHeight - viewportMargin
+    };
+  }
+
+  function overlapsViewport(rect, bounds) {
+    return (
+      rect.pageLeft + rect.width > bounds.left &&
+      rect.pageLeft < bounds.right &&
+      rect.pageTop + rect.height > bounds.top &&
+      rect.pageTop < bounds.bottom
+    );
+  }
+
+  function clampBoxRect(rect, minWidth = 12, minHeight = 12) {
+    const bounds = getSafeViewportBounds();
+    if (!overlapsViewport(rect, bounds)) {
+      return rect;
+    }
+
+    const left = clamp(rect.pageLeft, bounds.left, Math.max(bounds.left, bounds.right - minWidth));
+    const top = clamp(rect.pageTop, bounds.top, Math.max(bounds.top, bounds.bottom - minHeight));
+    const right = clamp(rect.pageLeft + rect.width, left + minWidth, bounds.right);
+    const bottom = clamp(rect.pageTop + rect.height, top + minHeight, bounds.bottom);
+
+    return {
+      pageLeft: left,
+      pageTop: top,
+      width: Math.max(right - left, minWidth),
+      height: Math.max(bottom - top, minHeight)
+    };
+  }
+
+  function getFloatingPosition(preferredLeft, preferredTop, width, height) {
+    const bounds = getSafeViewportBounds();
+    return {
+      pageLeft: clamp(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
+      pageTop: clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
+    };
+  }
+
   function renderAnnotations(state) {
-    const modeKey = state.selectionMode === 'mask' ? 'tipMaskMode' : 'tipSelectMode';
     const candidatePadding = PINFIX_BOX_PADDING_OPTIONS[state.settings.boxPadding] || 0;
     candidate.innerHTML = `
-      <div class="pinfix-tip">
-        <span>[ ${escapeHtml(t('tipShrink'))}</span>
-        <span>] ${escapeHtml(t('tipExpand'))}</span>
-        <span>${escapeHtml(t(modeKey))}</span>
+      <div class="pinfix-candidate-tools">
+        <button type="button" data-action="candidate-adjust" data-direction="-1" title="${escapeHtml(t('tipShrink'))}">${iconSvg('minus')}</button>
+        <button type="button" data-action="candidate-adjust" data-direction="1" title="${escapeHtml(t('tipExpand'))}">${iconSvg('plus')}</button>
+        <button type="button" data-action="candidate-pick" data-kind="annotate" title="${escapeHtml(t('tipSelectMode'))}">${iconSvg('edit')}</button>
+        <button type="button" data-action="candidate-pick" data-kind="mask" title="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
       </div>
     `;
 
@@ -1853,15 +2190,25 @@ function createUI(options) {
     if (!currentCandidate || !state.open || state.tool !== 'select' || state.captureHidden) {
       candidate.classList.add('pinfix-hidden');
     } else {
-      const displayRect = expandRect(currentCandidate, candidatePadding);
+      const displayRect = clampBoxRect(expandRect(currentCandidate, candidatePadding));
       candidate.classList.remove('pinfix-hidden');
       candidate.style.left = `${displayRect.pageLeft}px`;
       candidate.style.top = `${displayRect.pageTop}px`;
       candidate.style.width = `${Math.max(displayRect.width, 12)}px`;
       candidate.style.height = `${Math.max(displayRect.height, 12)}px`;
+      const tools = candidate.querySelector('.pinfix-candidate-tools');
+      const toolsPosition = getFloatingPosition(
+        displayRect.pageLeft + displayRect.width - 124 - 8,
+        displayRect.pageTop + 8,
+        124,
+        28
+      );
+      tools.style.left = `${toolsPosition.pageLeft - displayRect.pageLeft}px`;
+      tools.style.top = `${toolsPosition.pageTop - displayRect.pageTop}px`;
+      tools.style.right = 'auto';
     }
 
-    overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
+    overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
     noteLayer.innerHTML = '';
 
     state.masks.forEach((mask) => {
@@ -1883,7 +2230,7 @@ function createUI(options) {
     const padding = PINFIX_BOX_PADDING_OPTIONS[annotation.style.boxPadding] || 0;
     const stroke = annotation.surfaceTone === 'dark' ? 'rgba(255,255,255,0.95)' : 'rgba(15,23,42,0.88)';
     const isFocused = annotation.id === state.highlightedAnnotationId;
-    const boxRect = expandRect(annotation.rect, padding);
+    const boxRect = clampBoxRect(expandRect(annotation.rect, padding), 16, 16);
 
     const box = document.createElement('div');
     box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''}`;
@@ -1898,8 +2245,14 @@ function createUI(options) {
     const label = document.createElement('div');
     label.className = `pinfix-label ${isFocused ? 'is-focused' : ''}`;
     label.textContent = String(annotation.number);
-    label.style.left = `${boxRect.pageLeft + boxRect.width - labelSize * 0.38}px`;
-    label.style.top = `${boxRect.pageTop - labelSize * 0.38}px`;
+    const labelPosition = getFloatingPosition(
+      boxRect.pageLeft + boxRect.width - labelSize - 18,
+      boxRect.pageTop - labelSize * 0.55,
+      labelSize,
+      labelSize
+    );
+    label.style.left = `${labelPosition.pageLeft}px`;
+    label.style.top = `${labelPosition.pageTop}px`;
     label.style.width = `${labelSize}px`;
     label.style.height = `${labelSize}px`;
     label.style.fontSize = `${Math.round(labelSize * 0.52)}px`;
@@ -1911,6 +2264,37 @@ function createUI(options) {
       label.style.boxShadow = `0 0 0 3px ${color} inset, 0 10px 22px rgba(15,23,42,0.22)`;
     }
     overlayLayer.appendChild(label);
+    renderAnnotationTools(annotation, boxRect, {
+      pageLeft: labelPosition.pageLeft,
+      pageTop: labelPosition.pageTop,
+      width: labelSize,
+      height: labelSize
+    });
+  }
+
+  function renderAnnotationTools(annotation, boxRect, labelRect) {
+    const toolWidth = 92;
+    const toolHeight = 28;
+    let preferredLeft = boxRect.pageLeft + boxRect.width - toolWidth - 12;
+    const preferredTop = boxRect.pageTop + 8;
+    const labelOverlapsY = labelRect.pageTop + labelRect.height > preferredTop
+      && labelRect.pageTop < preferredTop + toolHeight;
+
+    if (labelOverlapsY && preferredLeft + toolWidth > labelRect.pageLeft - 6) {
+      preferredLeft = labelRect.pageLeft - toolWidth - 8;
+    }
+
+    const position = getFloatingPosition(preferredLeft, preferredTop, toolWidth, toolHeight);
+    const tools = document.createElement('div');
+    tools.className = 'pinfix-inline-tools pinfix-annotation-tools';
+    tools.style.left = `${position.pageLeft}px`;
+    tools.style.top = `${position.pageTop}px`;
+    tools.innerHTML = `
+      <button type="button" data-action="edit-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionEditNote'))}">${iconSvg('edit')}</button>
+      <button type="button" data-action="mask-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
+      <button type="button" data-action="delete-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionDelete'))}">${iconSvg('close')}</button>
+    `;
+    overlayLayer.appendChild(tools);
   }
 
   function renderMask(mask) {
@@ -1922,21 +2306,27 @@ function createUI(options) {
     element.style.height = `${Math.max(mask.rect.height, 12)}px`;
     element.innerHTML = `
       <div class="pinfix-mask-label">${escapeHtml(t('maskLabel'))}</div>
-      <button class="pinfix-mask-delete" type="button" data-action="delete-mask" data-id="${mask.id}">&times;</button>
+      <div class="pinfix-inline-tools pinfix-mask-tools">
+        <button type="button" data-action="adjust-mask" data-id="${mask.id}" data-delta="-8" title="${escapeHtml(t('actionShrinkMask'))}">${iconSvg('minus')}</button>
+        <button type="button" data-action="adjust-mask" data-id="${mask.id}" data-delta="8" title="${escapeHtml(t('actionExpandMask'))}">${iconSvg('plus')}</button>
+        <button type="button" data-action="delete-mask" data-id="${mask.id}" title="${escapeHtml(t('actionDeleteMask'))}">${iconSvg('close')}</button>
+      </div>
     `;
     overlayLayer.appendChild(element);
   }
 
   function getNotePosition(annotation) {
     const estimatedHeight = 128;
+    const cardWidth = Math.max(220, Math.min(360, window.innerWidth - 40));
     const padding = PINFIX_BOX_PADDING_OPTIONS[annotation.style.boxPadding] || 0;
-    const boxRect = expandRect(annotation.rect, padding);
+    const boxRect = clampBoxRect(expandRect(annotation.rect, padding), 16, 16);
     const defaultTop = boxRect.pageTop + boxRect.height + 10;
     const viewportBottom = window.scrollY + window.innerHeight;
     const shouldFlip = defaultTop + estimatedHeight > viewportBottom && boxRect.pageTop > window.scrollY + estimatedHeight;
+    const rightAlignedLeft = boxRect.pageLeft + boxRect.width - cardWidth;
 
     return {
-      left: clamp(boxRect.pageLeft, 12, window.scrollX + window.innerWidth - 372),
+      left: clamp(rightAlignedLeft, window.scrollX + 12, window.scrollX + window.innerWidth - cardWidth - 12),
       top: shouldFlip ? boxRect.pageTop - estimatedHeight - 10 : defaultTop
     };
   }
@@ -1945,6 +2335,7 @@ function createUI(options) {
     const color = PINFIX_COLOR_PRESETS[annotation.style.colorPreset].color;
     const position = getNotePosition(annotation);
     const summaryText = summariseNote(annotation.note) || t('noteMissingShort');
+    const isEditing = annotation.id === state.editingAnnotationId;
     const card = document.createElement('div');
     card.className = `pinfix-note-card ${annotation.surfaceTone === 'dark' ? 'is-dark' : ''} ${annotation.id === state.highlightedAnnotationId ? 'is-focused' : ''}`;
     card.dataset.notesVisible = String(state.settings.notesVisible);
@@ -1954,11 +2345,12 @@ function createUI(options) {
     card.innerHTML = `
       <div class="pinfix-note-head">
         <div class="pinfix-note-badge" style="background:${color}">${annotation.number}</div>
+        <strong class="pinfix-note-title">${escapeHtml(t('changeRequest'))}</strong>
         <button class="pinfix-note-delete" type="button" data-action="delete-annotation" data-id="${annotation.id}">&times;</button>
       </div>
-      <button class="pinfix-note-summary" type="button" data-action="edit-annotation">${escapeHtml(summaryText)}</button>
+      <button class="pinfix-note-summary ${isEditing ? 'pinfix-hidden' : ''}" type="button" data-action="edit-annotation" data-id="${annotation.id}">${escapeHtml(summaryText)}</button>
       <textarea
-        class="pinfix-note-input pinfix-hidden"
+        class="pinfix-note-input ${isEditing ? '' : 'pinfix-hidden'}"
         data-note-id="${annotation.id}"
         placeholder="${escapeHtml(t('notePlaceholder'))}"
       >${escapeHtml(annotation.note || '')}</textarea>
@@ -2172,6 +2564,7 @@ function createUI(options) {
       `;
 
     const maskButtonKey = state.selectionMode === 'mask' ? 'privacyModeStop' : 'privacyModeStart';
+    const hotkeysOpen = Boolean(state.expandedSections && state.expandedSections.hotkeys);
 
     return `
       <h3>${escapeHtml(t('more'))}</h3>
@@ -2201,8 +2594,16 @@ function createUI(options) {
         return t('languageEn');
       })}
       <div class="pinfix-divider"></div>
-      <div class="pinfix-section-title">${escapeHtml(t('hotkeys'))}</div>
-      <div class="pinfix-meta-copy">
+      <button
+        class="pinfix-section-toggle"
+        type="button"
+        data-action="toggle-section"
+        data-section="hotkeys"
+      >
+        <span>${escapeHtml(t('hotkeys'))}</span>
+        <span>${escapeHtml(t(hotkeysOpen ? 'collapse' : 'expand'))}</span>
+      </button>
+      <div class="pinfix-meta-copy ${hotkeysOpen ? '' : 'pinfix-hidden'}">
         <div>${escapeHtml(t('hotkeyCopy'))}</div>
         <div>${escapeHtml(t('hotkeyScreenshot'))}</div>
         <div>${escapeHtml(t('hotkeyExport'))}</div>
@@ -2241,6 +2642,7 @@ function createPinFixApp() {
     captureHidden: false,
     countdownRemaining: 0,
     candidate: null,
+    candidateElement: null,
     annotations: [],
     masks: [],
     globalNote: '',
@@ -2249,6 +2651,10 @@ function createPinFixApp() {
     toast: '',
     history: [],
     highlightedAnnotationId: '',
+    editingAnnotationId: '',
+    expandedSections: {
+      hotkeys: false
+    },
     pendingActionConfirm: null,
     pageTone: 'light',
     settings: storage.loadGlobalSettings()
@@ -2272,6 +2678,12 @@ function createPinFixApp() {
     onDeleteAnnotation: (id) => deleteAnnotation(id),
     onDeleteMask: (id) => deleteMask(id),
     onFocusAnnotation: (id) => focusAnnotation(id),
+    onEditAnnotation: (id) => editAnnotation(id),
+    onMaskAnnotation: (id) => maskAnnotation(id),
+    onAdjustMask: (id, delta) => adjustMask(id, delta),
+    onToggleSection: (section) => toggleSection(section),
+    onCandidateAdjust: (direction) => adjustCandidate(direction),
+    onCandidatePick: (kind) => addCandidateSelection(kind),
     onChangeNote: (id, value, saveNow) => updateNote(id, value, saveNow),
     onChangeGlobalNote: (value) => updateGlobalNote(value),
     onResizeGlobalNote: (height) => {
@@ -2284,6 +2696,7 @@ function createPinFixApp() {
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     onCandidateChange: ({ element }) => {
+      state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
       render();
     },
@@ -2403,7 +2816,8 @@ function createPinFixApp() {
   }
 
   function showToast(keyOrText) {
-    state.toast = keyOrText.includes(' ') || keyOrText.includes('已') ? keyOrText : i18n.t(getLanguage(), keyOrText);
+    const translated = i18n.t(getLanguage(), keyOrText);
+    state.toast = translated === keyOrText ? keyOrText : translated;
     render();
 
     if (toastTimer) {
@@ -2460,6 +2874,11 @@ function createPinFixApp() {
     state.pendingActionConfirm = null;
   }
 
+  function clearCandidate() {
+    state.candidate = null;
+    state.candidateElement = null;
+  }
+
   function markAnnotationFocused(id) {
     state.highlightedAnnotationId = id;
 
@@ -2480,6 +2899,28 @@ function createPinFixApp() {
     }
 
     addAnnotation(element);
+  }
+
+  function adjustCandidate(direction) {
+    if (Number(direction) < 0) {
+      selector.shrink();
+      return;
+    }
+
+    selector.expand();
+  }
+
+  function addCandidateSelection(kind) {
+    if (!state.candidateElement) {
+      return;
+    }
+
+    if (kind === 'mask') {
+      addMask(state.candidateElement);
+      return;
+    }
+
+    addAnnotation(state.candidateElement);
   }
 
   function findExistingAnnotation(anchor, rect) {
@@ -2525,6 +2966,10 @@ function createPinFixApp() {
     };
 
     state.annotations.push(annotation);
+    state.editingAnnotationId = annotation.id;
+    state.settings.notesVisible = true;
+    clearCandidate();
+    saveGlobalSettings();
     savePageData();
     render();
   }
@@ -2543,6 +2988,9 @@ function createPinFixApp() {
       anchor,
       rect: anchor.rect
     });
+    state.selectionMode = 'annotate';
+    state.activePopover = null;
+    clearCandidate();
 
     savePageData();
     render();
@@ -2558,8 +3006,76 @@ function createPinFixApp() {
     annotation.note = value;
     clearPendingActionConfirm();
     if (saveNow) {
+      if (state.editingAnnotationId === id) {
+        state.editingAnnotationId = '';
+      }
       savePageData();
     }
+  }
+
+  function editAnnotation(id) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation) {
+      return;
+    }
+
+    state.editingAnnotationId = id;
+    state.settings.notesVisible = true;
+    state.activePopover = null;
+    markAnnotationFocused(id);
+    saveGlobalSettings();
+    savePageData();
+    render();
+  }
+
+  function maskAnnotation(id) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation) {
+      return;
+    }
+
+    if (hasExistingMask(annotation.anchor || {}, annotation.rect)) {
+      showToast('maskExists');
+      return;
+    }
+
+    takeHistorySnapshot();
+    state.masks.push({
+      id: createId('mask'),
+      anchor: annotation.anchor,
+      rect: { ...annotation.rect }
+    });
+    clearPendingActionConfirm();
+    savePageData();
+    render();
+    showToast('privacyMaskAdded');
+  }
+
+  function adjustMask(id, delta) {
+    const mask = state.masks.find((item) => item.id === id);
+    if (!mask || !mask.rect) {
+      return;
+    }
+
+    const amount = Number(delta);
+    const nextWidth = mask.rect.width + amount * 2;
+    const nextHeight = mask.rect.height + amount * 2;
+    if (nextWidth < 16 || nextHeight < 16) {
+      return;
+    }
+
+    takeHistorySnapshot();
+    mask.rect = {
+      ...mask.rect,
+      pageLeft: Math.max(0, mask.rect.pageLeft - amount),
+      pageTop: Math.max(0, mask.rect.pageTop - amount),
+      width: nextWidth,
+      height: nextHeight
+    };
+    mask.anchor = null;
+    clearPendingActionConfirm();
+    savePageData();
+    render();
   }
 
   function updateGlobalNote(value) {
@@ -2569,12 +3085,11 @@ function createPinFixApp() {
   }
 
   function deleteAnnotation(id) {
-    if (!window.confirm(i18n.t(getLanguage(), 'deleteConfirm'))) {
-      return;
-    }
-
     takeHistorySnapshot();
     state.annotations = state.annotations.filter((item) => item.id !== id);
+    if (state.editingAnnotationId === id) {
+      state.editingAnnotationId = '';
+    }
     renumberAnnotations();
     clearPendingActionConfirm();
     savePageData();
@@ -2599,6 +3114,7 @@ function createPinFixApp() {
     state.annotations = [];
     state.masks = [];
     state.globalNote = '';
+    state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
     render();
@@ -2630,6 +3146,7 @@ function createPinFixApp() {
     state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = snapshot.globalNote;
+    state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
     render();
@@ -2744,6 +3261,11 @@ function createPinFixApp() {
     render();
   }
 
+  function toggleSection(section) {
+    state.expandedSections[section] = !state.expandedSections[section];
+    render();
+  }
+
   function togglePrivacyMode() {
     if (state.selectionMode === 'mask') {
       state.selectionMode = 'annotate';
@@ -2838,6 +3360,10 @@ function createPinFixApp() {
   }
 
   function runNamedAction(name) {
+    if (name === 'close-pinfix') {
+      toggleOpen(false);
+      return;
+    }
     if (name === 'undo') {
       undo();
       return;
@@ -2928,7 +3454,10 @@ function createPinFixApp() {
       if (state.activePopover) {
         state.activePopover = null;
         render();
+        return;
       }
+
+      toggleOpen(false);
     }
   }
 

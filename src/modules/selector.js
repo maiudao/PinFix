@@ -3,6 +3,7 @@ function createSelectorManager(options) {
   let currentChain = [];
   let currentIndex = 0;
   let lastPoint = null;
+  let manualIndexLocked = false;
 
   function isIgnoredElement(element) {
     return !element || options.isIgnored(element);
@@ -19,6 +20,12 @@ function createSelectorManager(options) {
       style.visibility !== 'hidden' &&
       Number(style.opacity || '1') > 0
     );
+  }
+
+  function hasVisibleBoxStyle(style) {
+    const hasBackground = style.backgroundColor !== 'transparent'
+      && style.backgroundColor !== 'rgba(0, 0, 0, 0)';
+    return style.borderStyle !== 'none' || hasBackground || style.backgroundImage !== 'none';
   }
 
   // The selector prefers blocks that look like real modules instead of
@@ -41,7 +48,7 @@ function createSelectorManager(options) {
     const viewportArea = window.innerWidth * window.innerHeight;
     const style = window.getComputedStyle(element);
     const interactive = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'].includes(element.tagName);
-    const hasVisualBox = style.borderStyle !== 'none' || style.backgroundColor !== 'rgba(0, 0, 0, 0)';
+    const hasVisualBox = hasVisibleBoxStyle(style);
     const looksInline = style.display === 'inline' && !interactive;
 
     if (rect.width > window.innerWidth * 0.98 && rect.height > window.innerHeight * 0.98) {
@@ -69,24 +76,76 @@ function createSelectorManager(options) {
     return chain;
   }
 
+  function getElementArea(element) {
+    const rect = element.getBoundingClientRect();
+    return rect.width * rect.height;
+  }
+
+  function isBroadContainer(element) {
+    const rect = element.getBoundingClientRect();
+    const viewportArea = window.innerWidth * window.innerHeight;
+    const area = rect.width * rect.height;
+
+    return (
+      area > viewportArea * 0.68 ||
+      (rect.width > window.innerWidth * 0.92 && rect.height > window.innerHeight * 0.72)
+    );
+  }
+
+  function scoreDefaultCandidate(element, index) {
+    const rect = element.getBoundingClientRect();
+    const area = getElementArea(element);
+    const viewportArea = window.innerWidth * window.innerHeight;
+    const tagName = element.tagName;
+    const style = window.getComputedStyle(element);
+    const interactive = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'].includes(tagName);
+    const hasVisualBox = hasVisibleBoxStyle(style);
+    const containerLike = element.children.length > 1 && ['DIV', 'SECTION', 'ARTICLE', 'LI'].includes(tagName);
+    let score = index * 8;
+
+    if (interactive) {
+      score -= 18;
+    }
+
+    if (area < 1200 || rect.width < 20 || rect.height < 20) {
+      score += interactive || hasVisualBox ? 6 : 36;
+    }
+
+    if (hasVisualBox) {
+      score -= 10;
+    }
+
+    if (containerLike && area > 4200) {
+      score += 16;
+    }
+
+    if (area > viewportArea * 0.45) {
+      score += 80;
+    }
+
+    if (isBroadContainer(element)) {
+      score += 160;
+    }
+
+    if (['MAIN', 'HEADER', 'FOOTER'].includes(tagName)) {
+      score += 80;
+    }
+
+    if (style.display === 'inline' && !interactive) {
+      score += 24;
+    }
+
+    return score;
+  }
+
   function findDefaultIndex(chain) {
     if (!chain.length) {
       return 0;
     }
 
-    const viewportArea = window.innerWidth * window.innerHeight;
-
-    for (let index = 0; index < chain.length; index += 1) {
-      const rect = chain[index].getBoundingClientRect();
-      const area = rect.width * rect.height;
-      const goodArea = area > 1600 && area < viewportArea * 0.65;
-      const balancedShape = rect.width > 24 && rect.height > 24;
-      if (goodArea && balancedShape) {
-        return index;
-      }
-    }
-
-    return 0;
+    return chain
+      .map((element, index) => ({ index, score: scoreDefaultCandidate(element, index) }))
+      .sort((left, right) => left.score - right.score)[0].index;
   }
 
   function notifyCandidate() {
@@ -118,9 +177,10 @@ function createSelectorManager(options) {
     const chain = collectChain(target);
     const currentElement = currentChain[currentIndex] || null;
     currentChain = chain;
-    if (currentElement && chain.includes(currentElement)) {
+    if (manualIndexLocked && currentElement && chain.includes(currentElement) && !isBroadContainer(currentElement)) {
       currentIndex = chain.indexOf(currentElement);
     } else {
+      manualIndexLocked = false;
       currentIndex = findDefaultIndex(chain);
     }
     notifyCandidate();
@@ -145,6 +205,7 @@ function createSelectorManager(options) {
     event.stopPropagation();
     event.stopImmediatePropagation();
     options.onSelect(element);
+    manualIndexLocked = false;
   }
 
   function adjustSelection(direction) {
@@ -153,6 +214,7 @@ function createSelectorManager(options) {
     }
 
     currentIndex = clamp(currentIndex + direction, 0, currentChain.length - 1);
+    manualIndexLocked = true;
     notifyCandidate();
   }
 
@@ -195,6 +257,7 @@ function createSelectorManager(options) {
       enabled = false;
       currentChain = [];
       currentIndex = 0;
+      manualIndexLocked = false;
       window.removeEventListener('pointermove', handlePointerMove, true);
       window.removeEventListener('click', handleClick, true);
       window.removeEventListener('keydown', handleKeydown, true);

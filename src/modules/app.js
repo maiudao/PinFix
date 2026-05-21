@@ -17,6 +17,7 @@ function createPinFixApp() {
     captureHidden: false,
     countdownRemaining: 0,
     candidate: null,
+    candidateElement: null,
     annotations: [],
     masks: [],
     globalNote: '',
@@ -25,6 +26,10 @@ function createPinFixApp() {
     toast: '',
     history: [],
     highlightedAnnotationId: '',
+    editingAnnotationId: '',
+    expandedSections: {
+      hotkeys: false
+    },
     pendingActionConfirm: null,
     pageTone: 'light',
     settings: storage.loadGlobalSettings()
@@ -48,6 +53,12 @@ function createPinFixApp() {
     onDeleteAnnotation: (id) => deleteAnnotation(id),
     onDeleteMask: (id) => deleteMask(id),
     onFocusAnnotation: (id) => focusAnnotation(id),
+    onEditAnnotation: (id) => editAnnotation(id),
+    onMaskAnnotation: (id) => maskAnnotation(id),
+    onAdjustMask: (id, delta) => adjustMask(id, delta),
+    onToggleSection: (section) => toggleSection(section),
+    onCandidateAdjust: (direction) => adjustCandidate(direction),
+    onCandidatePick: (kind) => addCandidateSelection(kind),
     onChangeNote: (id, value, saveNow) => updateNote(id, value, saveNow),
     onChangeGlobalNote: (value) => updateGlobalNote(value),
     onResizeGlobalNote: (height) => {
@@ -60,6 +71,7 @@ function createPinFixApp() {
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     onCandidateChange: ({ element }) => {
+      state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
       render();
     },
@@ -179,7 +191,8 @@ function createPinFixApp() {
   }
 
   function showToast(keyOrText) {
-    state.toast = keyOrText.includes(' ') || keyOrText.includes('已') ? keyOrText : i18n.t(getLanguage(), keyOrText);
+    const translated = i18n.t(getLanguage(), keyOrText);
+    state.toast = translated === keyOrText ? keyOrText : translated;
     render();
 
     if (toastTimer) {
@@ -236,6 +249,11 @@ function createPinFixApp() {
     state.pendingActionConfirm = null;
   }
 
+  function clearCandidate() {
+    state.candidate = null;
+    state.candidateElement = null;
+  }
+
   function markAnnotationFocused(id) {
     state.highlightedAnnotationId = id;
 
@@ -256,6 +274,28 @@ function createPinFixApp() {
     }
 
     addAnnotation(element);
+  }
+
+  function adjustCandidate(direction) {
+    if (Number(direction) < 0) {
+      selector.shrink();
+      return;
+    }
+
+    selector.expand();
+  }
+
+  function addCandidateSelection(kind) {
+    if (!state.candidateElement) {
+      return;
+    }
+
+    if (kind === 'mask') {
+      addMask(state.candidateElement);
+      return;
+    }
+
+    addAnnotation(state.candidateElement);
   }
 
   function findExistingAnnotation(anchor, rect) {
@@ -301,6 +341,10 @@ function createPinFixApp() {
     };
 
     state.annotations.push(annotation);
+    state.editingAnnotationId = annotation.id;
+    state.settings.notesVisible = true;
+    clearCandidate();
+    saveGlobalSettings();
     savePageData();
     render();
   }
@@ -319,6 +363,9 @@ function createPinFixApp() {
       anchor,
       rect: anchor.rect
     });
+    state.selectionMode = 'annotate';
+    state.activePopover = null;
+    clearCandidate();
 
     savePageData();
     render();
@@ -334,8 +381,76 @@ function createPinFixApp() {
     annotation.note = value;
     clearPendingActionConfirm();
     if (saveNow) {
+      if (state.editingAnnotationId === id) {
+        state.editingAnnotationId = '';
+      }
       savePageData();
     }
+  }
+
+  function editAnnotation(id) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation) {
+      return;
+    }
+
+    state.editingAnnotationId = id;
+    state.settings.notesVisible = true;
+    state.activePopover = null;
+    markAnnotationFocused(id);
+    saveGlobalSettings();
+    savePageData();
+    render();
+  }
+
+  function maskAnnotation(id) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation) {
+      return;
+    }
+
+    if (hasExistingMask(annotation.anchor || {}, annotation.rect)) {
+      showToast('maskExists');
+      return;
+    }
+
+    takeHistorySnapshot();
+    state.masks.push({
+      id: createId('mask'),
+      anchor: annotation.anchor,
+      rect: { ...annotation.rect }
+    });
+    clearPendingActionConfirm();
+    savePageData();
+    render();
+    showToast('privacyMaskAdded');
+  }
+
+  function adjustMask(id, delta) {
+    const mask = state.masks.find((item) => item.id === id);
+    if (!mask || !mask.rect) {
+      return;
+    }
+
+    const amount = Number(delta);
+    const nextWidth = mask.rect.width + amount * 2;
+    const nextHeight = mask.rect.height + amount * 2;
+    if (nextWidth < 16 || nextHeight < 16) {
+      return;
+    }
+
+    takeHistorySnapshot();
+    mask.rect = {
+      ...mask.rect,
+      pageLeft: Math.max(0, mask.rect.pageLeft - amount),
+      pageTop: Math.max(0, mask.rect.pageTop - amount),
+      width: nextWidth,
+      height: nextHeight
+    };
+    mask.anchor = null;
+    clearPendingActionConfirm();
+    savePageData();
+    render();
   }
 
   function updateGlobalNote(value) {
@@ -345,12 +460,11 @@ function createPinFixApp() {
   }
 
   function deleteAnnotation(id) {
-    if (!window.confirm(i18n.t(getLanguage(), 'deleteConfirm'))) {
-      return;
-    }
-
     takeHistorySnapshot();
     state.annotations = state.annotations.filter((item) => item.id !== id);
+    if (state.editingAnnotationId === id) {
+      state.editingAnnotationId = '';
+    }
     renumberAnnotations();
     clearPendingActionConfirm();
     savePageData();
@@ -375,6 +489,7 @@ function createPinFixApp() {
     state.annotations = [];
     state.masks = [];
     state.globalNote = '';
+    state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
     render();
@@ -406,6 +521,7 @@ function createPinFixApp() {
     state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = snapshot.globalNote;
+    state.editingAnnotationId = '';
     clearPendingActionConfirm();
     savePageData();
     render();
@@ -520,6 +636,11 @@ function createPinFixApp() {
     render();
   }
 
+  function toggleSection(section) {
+    state.expandedSections[section] = !state.expandedSections[section];
+    render();
+  }
+
   function togglePrivacyMode() {
     if (state.selectionMode === 'mask') {
       state.selectionMode = 'annotate';
@@ -614,6 +735,10 @@ function createPinFixApp() {
   }
 
   function runNamedAction(name) {
+    if (name === 'close-pinfix') {
+      toggleOpen(false);
+      return;
+    }
     if (name === 'undo') {
       undo();
       return;
@@ -704,7 +829,10 @@ function createPinFixApp() {
       if (state.activePopover) {
         state.activePopover = null;
         render();
+        return;
       }
+
+      toggleOpen(false);
     }
   }
 
