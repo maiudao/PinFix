@@ -1,155 +1,168 @@
 # PinFix
 
-PinFix 是一个给产品负责人、设计师、测试人员和不会写代码的人使用的网页标注助手。
+PinFix is a Tampermonkey userscript for marking up real web pages. It helps product owners, designers, testers, and non-programmers point at page areas, write change requests, and send developers or Codex a clear screenshot plus structured notes.
 
-它的目标很直接：
+PinFix 是一个油猴网页标注脚本。它适合产品负责人、设计师、测试人员和不写代码的人，用来在真实网页上标出哪里要改、写清楚怎么改，然后把截图和结构化说明发给开发或 Codex。
 
-- 在真实网页上点选需要修改的位置。
-- 自动生成编号。
-- 在编号旁边写清楚“这里怎么改”。
-- 复制结构化文字。
-- 单击截图按钮打开截图菜单，双击截图按钮可直接复制当前可见区域图片，也可以进入“截图准备”后配合系统截图。
+## 中文说明
 
-一句话介绍：
+### PinFix 能做什么
 
-> 点哪里，写怎么改，一键整理给 Codex。
-
-## 这次交付了什么
-
-本仓库当前交付的是第一版可用项目，形态是油猴脚本。
-
-已经包含：
-
-- 左侧固定入口按钮。
-- 5 个主工具入口：选择、样式、截图、复制、更多。
-- 鼠标悬停高亮候选模块。
-- 候选模块中心提供缩小、扩大、普通标注、遮挡 4 个快捷按钮。
-- 双击模块生成编号标注。
-- 点击标注框、编号或写要求按钮后，展开当前这一条修改要求。
-- 页面底部补充说明区。
-- 自动保存和刷新恢复。
-- 简体中文 / English 双语界面。
+- 在网页上双击模块生成编号标注。
+- 给每个编号写“修改要求”。
 - 复制结构化 Markdown 说明。
-- 截图准备模式。
-- 当前可见区域图片导出。
-- 样式设置、撤销、删除单个标注、清空当前页全部内容、标注清单。
-- 导出前漏填提醒，避免说明没写完就直接导出。
-- 隐私遮挡模式，可把敏感区域盖住后再截图或导出。
-- 标注跳转定位和常用快捷键提示。
-- 标注框、编号标签、操作按钮和修改要求面板会自动避开屏幕边缘。
-- 页面滚动后，离屏标注会自然隐藏，不会堆到屏幕顶部。
+- 截取或保存当前可见区域图片。
+- 用“截图准备”模式配合系统截图。
+- 用隐私遮挡盖住敏感信息。
+- 用“补充说明”写页面整体要求。
+- 自动保存当前页面的标注、修改要求、遮挡和补充说明。
 
-## 怎么使用
+### 适合什么场景
 
-### 1. 安装脚本
+- 给开发说明页面 UI、文案、排版、交互问题。
+- 给 Codex 说明真实网页上的具体修改点。
+- 在后台页、商品页、表单页、活动页里连续标注多个问题。
+- 把截图中的编号和文字说明对应起来，减少沟通遗漏。
+
+### 安装
 
 1. 安装 Tampermonkey。
-2. 只打开这一个文件：[pinfix.user.js](pinfix.user.js)。
+2. 打开 [pinfix.user.js](pinfix.user.js)。
 3. 在 Tampermonkey 里确认安装。
 
-普通使用只需要这一个文件，其他目录都是开发和维护 PinFix 时才会用到。
+普通使用只需要安装根目录这个 `pinfix.user.js` 文件。
 
-### 2. 在网页里工作
+### 使用
 
-1. 打开任意网页。
-2. 点击左侧中间的双圆点入口。
-3. 点 `选择`，移动到页面模块后，双击模块新增编号，或用候选框中心按钮标注。
-4. 点击红框、编号或写要求按钮，在修改要求卡片里写清楚改动要求。
-5. 需要时再打开 `样式`、`截图` 或 `更多`。
+1. 打开需要标注的网页。
+2. 点击左侧的双圆点入口，打开 PinFix。
+3. 点 `选择`，把鼠标移到要标注的网页模块上。
+4. 双击模块生成编号，或者点击候选框中间的普通标注按钮。
+5. 点击红框、编号或写要求按钮，填写这一处的修改要求。
+6. 继续标注其他模块；如果要选内部小模块，可以直接在已标注区域里继续双击内部元素。
+7. 点 `复制`，复制结构化文字说明。
+8. 点 `截图 > 保存到本地` 保存当前可见区域图片，或双击 `截图` 按钮快速截图。
 
-### 3. 导出给 Codex 或开发
+### 常用功能
 
-- 点 `复制`：复制结构化文字说明。
-- 双击 `截图` 按钮：直接复制当前可见区域图片，成功后可用 `Ctrl+V` 粘贴，也可从提示里保存到本地。
-- 点 `截图 > 截图准备`：隐藏工具栏和备注，保留网页、框线和编号，方便手动截图。
-- 点 `截图 > 保存到本地`：生成当前可见区域 PNG。
-- 点 `更多 > 开始遮挡`：先给敏感信息加遮挡，再截图或导出。
+- `选择`：进入网页模块选择模式。
+- `样式`：调整标注颜色、粗细、编号大小和显示策略。
+- `截图`：截图准备、保存到本地、复制图片。
+- `复制`：复制 Markdown 修改说明。
+- `更多`：撤销、隐藏备注、清空当前页、隐私遮挡、语言、快捷键、标注清单。
+- `补充说明`：写不属于某一个编号的页面整体说明。
 
-### 4. 第二轮打磨点
+### 关闭和数据
 
-这一轮重点补的是这些实用细节：
+点击工具栏右上角的关闭按钮后，PinFix 会进入静默状态：页面上只保留左侧小入口，红框、编号、遮挡、修改要求、补充说明、菜单和提示都会隐藏，不影响正常浏览网页。
 
-- 如果还有标注没写说明，导出前会先提醒，再点一次才继续。
-- 可以进入“隐私遮挡”模式，点击页面区域生成遮挡块。
-- “更多”菜单里会显示导出前检查、遮挡数量和快捷键。
-- 标注清单默认收起，悬停或点击入口后会在菜单旁边显示详细清单；从清单跳转时，会额外做一轮定位高亮。
+关闭不会删除数据。重新打开 PinFix 后，当前页面之前的标注和说明会恢复。
 
-### 5. 第三轮打磨点
+### 截图说明
 
-这一轮重点补的是交互细节和边缘场景：
+- 双击 `截图` 按钮会优先把当前可见区域图片复制到剪贴板。
+- 如果浏览器限制图片复制，PinFix 会自动下载 PNG。
+- `截图 > 保存到本地` 会直接保存当前可见区域 PNG。
+- `截图 > 截图准备` 会隐藏工具栏和输入框，只保留网页、红框和编号，方便用系统截图。
 
-- 关闭态入口改为更小的双圆点，不再显示 `PF` 或竖向胶囊。
-- 工具栏右上角关闭按钮默认隐藏，只在鼠标移入工具栏或键盘聚焦时出现。
-- 候选框提供缩小、扩大、普通标注、遮挡 4 个快捷按钮。
-- 删除单个标注不再弹确认框，误删可用撤销恢复。
-- 标注框、编号标签、按钮组和修改要求面板会尽量保持在当前可见屏幕内。
+### 限制
 
-### 6. 第四轮和边缘安全打磨点
+- PinFix 当前只处理当前可见区域，不做长图截图。
+- 图片导出是浏览器内重绘，不等于系统原生截图。
+- 跨域图片、视频、地图、iframe、canvas 等内容可能无法完整导出。
+- 遇到复杂页面，建议用“截图准备”配合 `Win + Shift + S` 或系统截图工具。
+- 数据保存在本机浏览器本地存储里，不上传到服务器。
 
-这一轮重点解决密集标注、边缘元素和滚动后的显示问题：
+## English Guide
 
-- 修改要求默认不常驻展开，同一时间只显示当前激活标注的修改要求。
-- 新建标注后自动激活，方便马上填写说明。
-- 未填写说明的编号右上角显示小红点，写入内容后红点消失。
-- 候选框 4 个快捷按钮移动到元素中心，避免挤在右上角挡内容。
-- 顶部、底部、左侧、右侧和全宽元素都会使用统一的边缘安全定位。
-- 编号空间不足时可以进入红框内部，保证完整显示。
-- 修改要求面板会避开左侧工具栏、右侧滚动条和底部浮层。
-- 离屏标注整组隐藏，滚回对应模块后恢复显示。
-- Demo 页面新增 Edge Safe Test Lab，用来复测全宽 Banner、左右贴边、小按钮和底部 sticky 操作栏。
+### What PinFix Does
 
-## 本地构建
+PinFix lets you annotate a live web page, number the areas that need changes, write notes for each number, and export clear change requests.
 
-项目不依赖复杂构建链，只需要 Node.js。
+It helps you:
+
+- Double-click page modules to create numbered annotations.
+- Write a change request for each annotation.
+- Copy structured Markdown notes.
+- Save or copy a screenshot of the current viewport.
+- Use screenshot-prep mode for system screenshots.
+- Mask sensitive areas before sharing.
+- Add page-level notes that are not tied to one annotation.
+- Keep page data saved locally.
+
+### When To Use It
+
+- Explaining UI, copy, layout, or interaction changes to developers.
+- Giving Codex precise web page modification instructions.
+- Reviewing product pages, admin pages, forms, and landing pages.
+- Matching screenshot numbers with written requirements.
+
+### Install
+
+1. Install Tampermonkey.
+2. Open [pinfix.user.js](pinfix.user.js).
+3. Confirm installation in Tampermonkey.
+
+For normal use, install only the root `pinfix.user.js` file.
+
+### How To Use
+
+1. Open the page you want to review.
+2. Click the small double-dot launcher on the left side.
+3. Click `Select`, then move your mouse over the page module.
+4. Double-click the module to create an annotation, or use the annotate button in the candidate toolbar.
+5. Click the red box, number label, or edit button to write the change request.
+6. Continue annotating. You can still select smaller elements inside an already annotated larger module.
+7. Click `Copy` to copy structured Markdown notes.
+8. Use `Capture > Save locally`, or double-click `Capture` for a quick screenshot.
+
+### Main Tools
+
+- `Select`: choose page elements to annotate.
+- `Style`: change color, line width, label size, and contrast mode.
+- `Capture`: screenshot mode, save locally, copy image.
+- `Copy`: copy Markdown notes.
+- `More`: undo, hide notes, clear page data, privacy masks, language, hotkeys, annotation list.
+- `More notes`: add page-level notes.
+
+### Closing PinFix
+
+Click the close button in the toolbar to make PinFix quiet. Only the small launcher stays visible. Red boxes, labels, masks, notes, menus, and hints are hidden, so the page can be browsed normally.
+
+Closing PinFix does not delete data. Reopen it and the current page annotations come back.
+
+### Screenshot Notes
+
+- Double-click `Capture` to copy the current viewport image when the browser allows it.
+- If image clipboard access is blocked, PinFix downloads a PNG instead.
+- `Capture > Save locally` saves the current viewport as PNG.
+- `Capture > Screenshot mode` hides PinFix controls so you can use the system screenshot tool.
+
+### Limits
+
+- PinFix captures only the current viewport, not a full long page.
+- Image export is browser-rendered, not a native system screenshot.
+- Cross-origin images, videos, maps, iframes, and canvas content may not export perfectly.
+- For complex pages, use screenshot mode with your system screenshot tool.
+- All annotation data stays in local browser storage and is not uploaded.
+
+## Development
+
+The installable userscript is:
+
+- [pinfix.user.js](pinfix.user.js)
+
+Source files are modular under `src/`, and the build output is a single userscript.
 
 ```bash
 npm run build
 ```
 
-构建后会更新：
+The build updates:
 
 - [pinfix.user.js](pinfix.user.js)
 - [dist/pinfix.user.js](dist/pinfix.user.js)
 
-## 本地演示页
-
-可以直接打开：
+Local demo:
 
 - [demo/index.html](demo/index.html)
-
-这个页面用来手动测试：
-
-- 卡片列表
-- 表单区域
-- 深色背景区域
-- 长内容页面
-- 固定顶部导航
-- 全宽 Banner
-- 左右贴边模块
-- 底部 sticky 操作栏
-
-## 重要限制
-
-PinFix 第一版已经能用，但下面这些限制要明确：
-
-- 当前可见区域图片导出不是系统原生截图，而是浏览器内重绘。
-- 跨域图片、视频、地图、iframe、canvas 等内容可能导出不完整。
-- 遇到这类页面，优先用“截图准备”配合 `Win + Shift + S`。
-- 第一版不做长图截图。
-- 第一版不做云端同步，也不上传标注数据。
-
-## 关键文档
-
-项目详细文档目前在本地 `docs/` 目录里。注意：当前 `.gitignore` 会忽略 `docs/`，所以文档更新默认不会出现在普通 `git status` 里。
-
-## 开发说明
-
-对外安装入口始终只有一个：
-
-- [pinfix.user.js](pinfix.user.js)
-
-源码内部采用“分模块开发，单文件产物”的方式：
-
-- 源码拆开，方便理解和维护。
-- 产物合成一个 `pinfix.user.js`，方便直接安装。
-- 核心模块都带说明性注释，避免后续变成只能猜的黑盒。

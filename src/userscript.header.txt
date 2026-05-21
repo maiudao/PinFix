@@ -5,6 +5,12 @@
 // @description  Annotate real web pages with numbered notes for Codex or developers.
 // @author       PinFix
 // @match        *://*/*
+// @include      http://localhost:*/*
+// @include      https://localhost:*/*
+// @include      http://127.0.0.1:*/*
+// @include      https://127.0.0.1:*/*
+// @include      http://[::1]:*/*
+// @include      https://[::1]:*/*
 // @grant        none
 // @run-at       document-idle
 // @license      MIT

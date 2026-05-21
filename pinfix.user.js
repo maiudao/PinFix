@@ -5,6 +5,12 @@
 // @description  Annotate real web pages with numbered notes for Codex or developers.
 // @author       PinFix
 // @match        *://*/*
+// @include      http://localhost:*/*
+// @include      https://localhost:*/*
+// @include      http://127.0.0.1:*/*
+// @include      https://127.0.0.1:*/*
+// @include      http://[::1]:*/*
+// @include      https://[::1]:*/*
 // @grant        none
 // @run-at       document-idle
 // @license      MIT
@@ -4622,11 +4628,31 @@ function createPinFixApp() {
 }
 
 (function bootstrapPinFix() {
-  if (window.__pinfixInitialized__) {
+  if (window.__pinfixInitialized__ || window.__pinfixBootstrapping__) {
     return;
   }
 
-  window.__pinfixInitialized__ = true;
-  const app = createPinFixApp();
-  app.init();
+  window.__pinfixBootstrapping__ = true;
+
+  const start = () => {
+    if (window.__pinfixInitialized__) {
+      return;
+    }
+
+    if (!document.documentElement || !document.head || !document.body) {
+      window.setTimeout(start, 50);
+      return;
+    }
+
+    window.__pinfixInitialized__ = true;
+    window.__pinfixBootstrapping__ = false;
+    const app = createPinFixApp();
+    app.init();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
 })();
