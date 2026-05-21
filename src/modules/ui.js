@@ -296,10 +296,11 @@ function createUI(options) {
     const toolbarBox = root.querySelector('.pinfix-toolbar').getBoundingClientRect();
     popover.classList.remove('pinfix-hidden');
     const nextLeft = clamp(toolbarBox.right + 12, 12, window.innerWidth - 260);
-    const nextTop = clamp(toolbarBox.top, 12, window.innerHeight - 24);
     popover.style.left = `${nextLeft}px`;
-    popover.style.top = `${nextTop}px`;
     popover.innerHTML = buildPopoverContent(state);
+    const maxTop = Math.max(12, window.innerHeight - popover.offsetHeight - 12);
+    const nextTop = clamp(toolbarBox.top, 12, maxTop);
+    popover.style.top = `${nextTop}px`;
   }
 
   function renderAnnotations(state) {

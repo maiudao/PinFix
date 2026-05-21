@@ -41,7 +41,7 @@ PinFix 是一个给产品负责人、设计师、测试人员和不会写代码�
 ### 1. 安装脚本
 
 1. 安装 Tampermonkey。
-2. 只打开这一个文件：[dist/pinfix.user.js](dist/pinfix.user.js)。
+2. 只打开这一个文件：[pinfix.user.js](pinfix.user.js)。
 3. 在 Tampermonkey 里确认安装。
 
 普通使用只需要这一个文件，其他目录都是开发和维护 PinFix 时才会用到。
@@ -80,6 +80,7 @@ npm run build
 
 构建后会更新：
 
+- [pinfix.user.js](pinfix.user.js)
 - [dist/pinfix.user.js](dist/pinfix.user.js)
 
 ## 本地演示页
@@ -118,7 +119,7 @@ PinFix 第一版已经能用，但下面这些限制要明确：
 
 对外安装入口始终只有一个：
 
-- [dist/pinfix.user.js](dist/pinfix.user.js)
+- [pinfix.user.js](pinfix.user.js)
 
 源码内部采用“分模块开发，单文件产物”的方式：
 
