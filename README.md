@@ -121,11 +121,7 @@ PinFix 第一版已经能用，但下面这些限制要明确：
 
 ## 关键文档
 
-- [项目规则](docs/00_Project_Rules.md)
-- [产品规划](docs/Product_Plan.zh-CN.md)
-- [UI 设计规格](docs/UI_Design_Spec.zh-CN.md)
-- [实施路线图](docs/Implementation_Roadmap.zh-CN.md)
-- [本次实施计划](docs/Implementation_Plan.zh-CN.md)
+项目文档目前只保留在本地工作目录，不随公开仓库同步。
 
 ## 开发说明
 
