@@ -76,6 +76,26 @@ function createSelectorManager(options) {
     return chain;
   }
 
+  function getSelectionMode() {
+    return typeof options.getSelectionMode === 'function' ? options.getSelectionMode() : 'annotate';
+  }
+
+  function getElementsAtPoint(point) {
+    if (document.elementsFromPoint) {
+      return document.elementsFromPoint(point.x, point.y).filter((item) => item instanceof HTMLElement);
+    }
+
+    const single = document.elementFromPoint(point.x, point.y);
+    return single instanceof HTMLElement ? [single] : [];
+  }
+
+  // Saved PinFix overlays can sit above the page. In select mode we need the
+  // first real page element under the pointer, not our own annotation chrome.
+  function getSelectableTarget(point) {
+    const stack = getElementsAtPoint(point);
+    return stack.find((element) => !isIgnoredElement(element) && isMeaningfulCandidate(element)) || null;
+  }
+
   function getElementArea(element) {
     const rect = element.getBoundingClientRect();
     return rect.width * rect.height;
@@ -162,15 +182,11 @@ function createSelectorManager(options) {
       return;
     }
 
-    const target = document.elementFromPoint(point.x, point.y);
+    const target = getSelectableTarget(point);
     if (!target) {
       currentChain = [];
       currentIndex = 0;
       notifyCandidate();
-      return;
-    }
-
-    if (isIgnoredElement(target)) {
       return;
     }
 
@@ -191,19 +207,54 @@ function createSelectorManager(options) {
     refreshFromPoint(lastPoint);
   }
 
+  function stopSelectionEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
   function handleClick(event) {
     if (!enabled) {
       return;
     }
 
-    const element = currentChain[currentIndex];
-    if (!element || isIgnoredElement(event.target)) {
+    if (isIgnoredElement(event.target)) {
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    lastPoint = { x: event.clientX, y: event.clientY };
+    refreshFromPoint(lastPoint);
+    stopSelectionEvent(event);
+
+    const element = currentChain[currentIndex];
+    if (!element) {
+      return;
+    }
+
+    if (getSelectionMode() === 'mask') {
+      options.onSelect(element);
+      manualIndexLocked = false;
+    }
+  }
+
+  function handleDoubleClick(event) {
+    if (!enabled || getSelectionMode() === 'mask') {
+      return;
+    }
+
+    if (isIgnoredElement(event.target)) {
+      return;
+    }
+
+    lastPoint = { x: event.clientX, y: event.clientY };
+    refreshFromPoint(lastPoint);
+    stopSelectionEvent(event);
+
+    const element = currentChain[currentIndex];
+    if (!element) {
+      return;
+    }
+
     options.onSelect(element);
     manualIndexLocked = false;
   }
@@ -243,6 +294,7 @@ function createSelectorManager(options) {
       enabled = true;
       window.addEventListener('pointermove', handlePointerMove, true);
       window.addEventListener('click', handleClick, true);
+      window.addEventListener('dblclick', handleDoubleClick, true);
       window.addEventListener('keydown', handleKeydown, true);
 
       if (lastPoint) {
@@ -260,6 +312,7 @@ function createSelectorManager(options) {
       manualIndexLocked = false;
       window.removeEventListener('pointermove', handlePointerMove, true);
       window.removeEventListener('click', handleClick, true);
+      window.removeEventListener('dblclick', handleDoubleClick, true);
       window.removeEventListener('keydown', handleKeydown, true);
       notifyCandidate();
     },

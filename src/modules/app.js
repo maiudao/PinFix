@@ -74,6 +74,7 @@ function createPinFixApp() {
 
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
+    getSelectionMode: () => state.selectionMode,
     onCandidateChange: ({ element }) => {
       state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
@@ -274,7 +275,9 @@ function createPinFixApp() {
 
     focusTimer = window.setTimeout(() => {
       state.highlightedAnnotationId = '';
-      render();
+      if (state.editingAnnotationId !== id) {
+        render();
+      }
     }, 1800);
   }
 
@@ -393,9 +396,6 @@ function createPinFixApp() {
     annotation.note = value;
     clearPendingActionConfirm();
     if (saveNow) {
-      if (state.editingAnnotationId === id) {
-        state.editingAnnotationId = '';
-      }
       savePageData();
     }
   }
@@ -720,7 +720,15 @@ function createPinFixApp() {
         preferClipboard
       });
       lastScreenshotBlob = result.blob || null;
-      showToast(result.copied ? 'copiedImage' : 'downloadedImage');
+      if (preferClipboard) {
+        showToast(result.copied ? 'copiedImage' : 'screenshotDownloadedFallback', {
+          duration: result.copied ? 1800 : 6500,
+          tone: result.copied ? '' : 'success'
+        });
+        return;
+      }
+
+      showToast('downloadedImage');
     } catch (error) {
       showToast(i18n.t(getLanguage(), 'exportLimit'));
     }

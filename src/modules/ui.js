@@ -298,7 +298,6 @@ function createUI(options) {
 
     if (textarea.dataset.noteId) {
       options.onChangeNote(textarea.dataset.noteId, textarea.value, true);
-      setCardExpanded(textarea.closest('.pinfix-note-card'), false);
     }
   }
 
@@ -878,6 +877,7 @@ function createUI(options) {
     const isActive = annotation.id === state.activeAnnotationId;
     const isFocused = annotation.id === state.highlightedAnnotationId;
     const canActivate = state.open && !state.captureHidden;
+    const boxInteractive = canActivate && state.tool !== 'select';
     const boxRect = expandRect(annotation.rect, padding);
     const renderInfo = getAnnotationRenderInfo(boxRect);
     if (!renderInfo) {
@@ -887,7 +887,7 @@ function createUI(options) {
     const labelLayout = getLabelLayout(frameRect, labelSize);
 
     const box = document.createElement('div');
-    box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''}`;
+    box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${boxInteractive ? 'is-interactive' : ''}`;
     box.dataset.action = 'activate-annotation';
     box.dataset.id = annotation.id;
     box.style.left = `${frameRect.pageLeft}px`;
@@ -1219,7 +1219,7 @@ function createUI(options) {
         <h3>${escapeHtml(t('capture'))}</h3>
         <div class="pinfix-list">
           <button type="button" data-action="run" data-name="screenshot-mode">${escapeHtml(t('screenshotMode'))}</button>
-          <button type="button" data-action="run" data-name="export-image">${escapeHtml(t('exportImage'))}</button>
+          <button type="button" data-action="run" data-name="export-image">${escapeHtml(t('saveLocally'))}</button>
           <button type="button" data-action="run" data-name="copy-image">${escapeHtml(t('copyImage'))}</button>
         </div>
         <div class="pinfix-divider"></div>

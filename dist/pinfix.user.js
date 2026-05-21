@@ -180,7 +180,7 @@ function createI18n() {
       copy: '复制',
       more: '更多',
       screenshotMode: '截图准备',
-      exportImage: '导出当前画面',
+      exportImage: '保存当前画面',
       copyImage: '复制图片',
       saveLocally: '保存到本地',
       copyNotes: '复制文字',
@@ -278,7 +278,7 @@ function createI18n() {
       actionShrinkMask: '缩小遮挡',
       actionExpandMask: '扩大遮挡',
       actionDeleteMask: '删除遮挡',
-      emptyState: '还没有标注，先点“选择”再点击网页模块',
+      emptyState: '还没有标注，先点“选择”再双击网页模块',
       pageTitle: '需要修改的页面',
       pageUrl: '页面地址',
       viewportMode: '截图模式：当前可见区域',
@@ -296,7 +296,7 @@ function createI18n() {
       tipMaskMode: '遮挡模式',
       hotkeyCopy: 'Ctrl/Cmd + Shift + C：复制文字',
       hotkeyScreenshot: 'Ctrl/Cmd + Shift + S：截图准备',
-      hotkeyExport: 'Ctrl/Cmd + Shift + E：导出当前画面',
+      hotkeyExport: 'Ctrl/Cmd + Shift + E：保存当前画面',
       hotkeyUndo: 'Ctrl/Cmd + Z：撤销上一步',
       hotkeyNotes: 'Ctrl/Cmd + Shift + H：显示或隐藏备注'
     },
@@ -309,7 +309,7 @@ function createI18n() {
       copy: 'Copy',
       more: 'More',
       screenshotMode: 'Screenshot mode',
-      exportImage: 'Export image',
+      exportImage: 'Save current view',
       copyImage: 'Copy image',
       saveLocally: 'Save locally',
       copyNotes: 'Copy notes',
@@ -425,7 +425,7 @@ function createI18n() {
       tipMaskMode: 'Mask mode',
       hotkeyCopy: 'Ctrl/Cmd + Shift + C: Copy notes',
       hotkeyScreenshot: 'Ctrl/Cmd + Shift + S: Screenshot mode',
-      hotkeyExport: 'Ctrl/Cmd + Shift + E: Export image',
+      hotkeyExport: 'Ctrl/Cmd + Shift + E: Save current view',
       hotkeyUndo: 'Ctrl/Cmd + Z: Undo',
       hotkeyNotes: 'Ctrl/Cmd + Shift + H: Toggle notes'
     }
@@ -602,6 +602,26 @@ function createSelectorManager(options) {
     return chain;
   }
 
+  function getSelectionMode() {
+    return typeof options.getSelectionMode === 'function' ? options.getSelectionMode() : 'annotate';
+  }
+
+  function getElementsAtPoint(point) {
+    if (document.elementsFromPoint) {
+      return document.elementsFromPoint(point.x, point.y).filter((item) => item instanceof HTMLElement);
+    }
+
+    const single = document.elementFromPoint(point.x, point.y);
+    return single instanceof HTMLElement ? [single] : [];
+  }
+
+  // Saved PinFix overlays can sit above the page. In select mode we need the
+  // first real page element under the pointer, not our own annotation chrome.
+  function getSelectableTarget(point) {
+    const stack = getElementsAtPoint(point);
+    return stack.find((element) => !isIgnoredElement(element) && isMeaningfulCandidate(element)) || null;
+  }
+
   function getElementArea(element) {
     const rect = element.getBoundingClientRect();
     return rect.width * rect.height;
@@ -688,15 +708,11 @@ function createSelectorManager(options) {
       return;
     }
 
-    const target = document.elementFromPoint(point.x, point.y);
+    const target = getSelectableTarget(point);
     if (!target) {
       currentChain = [];
       currentIndex = 0;
       notifyCandidate();
-      return;
-    }
-
-    if (isIgnoredElement(target)) {
       return;
     }
 
@@ -717,19 +733,54 @@ function createSelectorManager(options) {
     refreshFromPoint(lastPoint);
   }
 
+  function stopSelectionEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
   function handleClick(event) {
     if (!enabled) {
       return;
     }
 
-    const element = currentChain[currentIndex];
-    if (!element || isIgnoredElement(event.target)) {
+    if (isIgnoredElement(event.target)) {
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    lastPoint = { x: event.clientX, y: event.clientY };
+    refreshFromPoint(lastPoint);
+    stopSelectionEvent(event);
+
+    const element = currentChain[currentIndex];
+    if (!element) {
+      return;
+    }
+
+    if (getSelectionMode() === 'mask') {
+      options.onSelect(element);
+      manualIndexLocked = false;
+    }
+  }
+
+  function handleDoubleClick(event) {
+    if (!enabled || getSelectionMode() === 'mask') {
+      return;
+    }
+
+    if (isIgnoredElement(event.target)) {
+      return;
+    }
+
+    lastPoint = { x: event.clientX, y: event.clientY };
+    refreshFromPoint(lastPoint);
+    stopSelectionEvent(event);
+
+    const element = currentChain[currentIndex];
+    if (!element) {
+      return;
+    }
+
     options.onSelect(element);
     manualIndexLocked = false;
   }
@@ -769,6 +820,7 @@ function createSelectorManager(options) {
       enabled = true;
       window.addEventListener('pointermove', handlePointerMove, true);
       window.addEventListener('click', handleClick, true);
+      window.addEventListener('dblclick', handleDoubleClick, true);
       window.addEventListener('keydown', handleKeydown, true);
 
       if (lastPoint) {
@@ -786,6 +838,7 @@ function createSelectorManager(options) {
       manualIndexLocked = false;
       window.removeEventListener('pointermove', handlePointerMove, true);
       window.removeEventListener('click', handleClick, true);
+      window.removeEventListener('dblclick', handleDoubleClick, true);
       window.removeEventListener('keydown', handleKeydown, true);
       notifyCandidate();
     },
@@ -2513,7 +2566,6 @@ function createUI(options) {
 
     if (textarea.dataset.noteId) {
       options.onChangeNote(textarea.dataset.noteId, textarea.value, true);
-      setCardExpanded(textarea.closest('.pinfix-note-card'), false);
     }
   }
 
@@ -3093,6 +3145,7 @@ function createUI(options) {
     const isActive = annotation.id === state.activeAnnotationId;
     const isFocused = annotation.id === state.highlightedAnnotationId;
     const canActivate = state.open && !state.captureHidden;
+    const boxInteractive = canActivate && state.tool !== 'select';
     const boxRect = expandRect(annotation.rect, padding);
     const renderInfo = getAnnotationRenderInfo(boxRect);
     if (!renderInfo) {
@@ -3102,7 +3155,7 @@ function createUI(options) {
     const labelLayout = getLabelLayout(frameRect, labelSize);
 
     const box = document.createElement('div');
-    box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''}`;
+    box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${boxInteractive ? 'is-interactive' : ''}`;
     box.dataset.action = 'activate-annotation';
     box.dataset.id = annotation.id;
     box.style.left = `${frameRect.pageLeft}px`;
@@ -3434,7 +3487,7 @@ function createUI(options) {
         <h3>${escapeHtml(t('capture'))}</h3>
         <div class="pinfix-list">
           <button type="button" data-action="run" data-name="screenshot-mode">${escapeHtml(t('screenshotMode'))}</button>
-          <button type="button" data-action="run" data-name="export-image">${escapeHtml(t('exportImage'))}</button>
+          <button type="button" data-action="run" data-name="export-image">${escapeHtml(t('saveLocally'))}</button>
           <button type="button" data-action="run" data-name="copy-image">${escapeHtml(t('copyImage'))}</button>
         </div>
         <div class="pinfix-divider"></div>
@@ -3614,6 +3667,7 @@ function createPinFixApp() {
 
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
+    getSelectionMode: () => state.selectionMode,
     onCandidateChange: ({ element }) => {
       state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
@@ -3814,7 +3868,9 @@ function createPinFixApp() {
 
     focusTimer = window.setTimeout(() => {
       state.highlightedAnnotationId = '';
-      render();
+      if (state.editingAnnotationId !== id) {
+        render();
+      }
     }, 1800);
   }
 
@@ -3933,9 +3989,6 @@ function createPinFixApp() {
     annotation.note = value;
     clearPendingActionConfirm();
     if (saveNow) {
-      if (state.editingAnnotationId === id) {
-        state.editingAnnotationId = '';
-      }
       savePageData();
     }
   }
@@ -4260,7 +4313,15 @@ function createPinFixApp() {
         preferClipboard
       });
       lastScreenshotBlob = result.blob || null;
-      showToast(result.copied ? 'copiedImage' : 'downloadedImage');
+      if (preferClipboard) {
+        showToast(result.copied ? 'copiedImage' : 'screenshotDownloadedFallback', {
+          duration: result.copied ? 1800 : 6500,
+          tone: result.copied ? '' : 'success'
+        });
+        return;
+      }
+
+      showToast('downloadedImage');
     } catch (error) {
       showToast(i18n.t(getLanguage(), 'exportLimit'));
     }
