@@ -836,42 +836,91 @@ function createUI(options) {
     };
   }
 
-  function getToolsLayout(frameRect, labelRect, toolWidth, toolHeight) {
+  function getCompactToolRailLayout(frameRect, labelRect, group, reserveBothGroups = false) {
     const bounds = getOperationBounds();
-    const candidates = [
-      {
-        pageLeft: frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2,
-        pageTop: frameRect.pageTop + frameRect.height / 2 - toolHeight / 2
-      },
-      {
-        pageLeft: frameRect.pageLeft + 12,
-        pageTop: frameRect.pageTop + frameRect.height / 2 - toolHeight / 2
-      },
-      {
-        pageLeft: frameRect.pageLeft + frameRect.width - toolWidth - 12,
-        pageTop: frameRect.pageTop + frameRect.height / 2 - toolHeight / 2
-      },
-      {
-        pageLeft: frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2,
-        pageTop: frameRect.pageTop + frameRect.height + 8
+    const gap = 6;
+    const inset = 6;
+    const annotationWidth = 78;
+    const candidateWidth = 103;
+    const toolHeight = 28;
+    const groupWidth = group === 'candidate' ? candidateWidth : annotationWidth;
+    const totalWidth = reserveBothGroups ? annotationWidth + gap + candidateWidth : groupWidth;
+    const groupOffset = reserveBothGroups && group === 'candidate' ? annotationWidth + gap : 0;
+    let railLeft = frameRect.pageLeft + inset;
+    let railTop = frameRect.pageTop + inset;
+
+    if (labelRect) {
+      const labelPad = 4;
+      const railRect = {
+        pageLeft: railLeft,
+        pageTop: railTop,
+        width: totalWidth,
+        height: toolHeight
+      };
+      const paddedLabelRect = {
+        pageLeft: labelRect.pageLeft - labelPad,
+        pageTop: labelRect.pageTop - labelPad,
+        width: labelRect.width + labelPad * 2,
+        height: labelRect.height + labelPad * 2
+      };
+
+      if (rectsOverlap(railRect, paddedLabelRect)) {
+        const lowerTop = labelRect.pageTop + labelRect.height + gap;
+        const maxInsideTop = frameRect.pageTop + frameRect.height - toolHeight - inset;
+        railTop = maxInsideTop >= frameRect.pageTop + inset ? Math.min(maxInsideTop, lowerTop) : lowerTop;
       }
-    ];
+    }
 
-    const best = candidates
-      .map((item) => getFloatingPositionInBounds(item.pageLeft, item.pageTop, toolWidth, toolHeight, bounds))
-      .find((item) => !rectsOverlap({ ...item, width: toolWidth, height: toolHeight }, labelRect));
+    railLeft = clampWithin(railLeft, bounds.left, Math.max(bounds.left, bounds.right - totalWidth));
+    railTop = clampWithin(railTop, bounds.top, Math.max(bounds.top, bounds.bottom - toolHeight));
 
-    return best || getFloatingPositionInBounds(
-      frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2,
-      frameRect.pageTop + frameRect.height / 2 - toolHeight / 2,
-      toolWidth,
-      toolHeight,
-      bounds
+    return {
+      pageLeft: railLeft + groupOffset,
+      pageTop: railTop,
+      width: groupWidth,
+      height: toolHeight
+    };
+  }
+
+  function positionCandidateTools(displayRect, activeRenderInfo) {
+    const tools = candidate.querySelector('.pinfix-candidate-tools');
+    if (!tools) {
+      return;
+    }
+
+    const pairedWithAnnotation = Boolean(activeRenderInfo);
+    const railFrameRect = pairedWithAnnotation ? activeRenderInfo.frameRect : displayRect;
+    const toolsPosition = getCompactToolRailLayout(
+      railFrameRect,
+      pairedWithAnnotation ? activeRenderInfo.labelRect : null,
+      'candidate',
+      pairedWithAnnotation
     );
+
+    tools.style.left = `${toolsPosition.pageLeft - displayRect.pageLeft}px`;
+    tools.style.top = `${toolsPosition.pageTop - displayRect.pageTop}px`;
+    tools.style.right = 'auto';
+  }
+
+  function shouldShareToolRail(leftRect, rightRect) {
+    if (!leftRect || !rightRect) {
+      return false;
+    }
+
+    const paddedLeftRect = {
+      pageLeft: leftRect.pageLeft - 12,
+      pageTop: leftRect.pageTop - 12,
+      width: leftRect.width + 24,
+      height: leftRect.height + 24
+    };
+
+    return rectsOverlap(paddedLeftRect, rightRect);
   }
 
   function renderAnnotations(state) {
     const candidatePadding = PINFIX_BOX_PADDING_OPTIONS[state.settings.boxPadding] || 0;
+    let candidateDisplayRect = null;
+    let activeRenderInfo = null;
     candidate.innerHTML = `
       <div class="pinfix-candidate-tools">
         <button type="button" data-action="candidate-adjust" data-direction="-1" title="${escapeHtml(t('tipShrink'))}" aria-label="${escapeHtml(t('tipShrink'))}">${iconSvg('minus')}</button>
@@ -891,18 +940,7 @@ function createUI(options) {
       candidate.style.top = `${displayRect.pageTop}px`;
       candidate.style.width = `${Math.max(displayRect.width, 12)}px`;
       candidate.style.height = `${Math.max(displayRect.height, 12)}px`;
-      const tools = candidate.querySelector('.pinfix-candidate-tools');
-      const toolWidth = 150;
-      const toolHeight = 36;
-      const toolsPosition = getFloatingPosition(
-        displayRect.pageLeft + displayRect.width / 2 - toolWidth / 2,
-        displayRect.pageTop + displayRect.height / 2 - toolHeight / 2,
-        toolWidth,
-        toolHeight
-      );
-      tools.style.left = `${toolsPosition.pageLeft - displayRect.pageLeft}px`;
-      tools.style.top = `${toolsPosition.pageTop - displayRect.pageTop}px`;
-      tools.style.right = 'auto';
+      candidateDisplayRect = displayRect;
     }
 
     overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
@@ -913,14 +951,24 @@ function createUI(options) {
     });
 
     state.annotations.forEach((annotation) => {
-      const renderInfo = renderAnnotationBox(annotation, state);
+      const renderInfo = renderAnnotationBox(annotation, state, candidateDisplayRect);
+      if (renderInfo && annotation.id === state.activeAnnotationId) {
+        activeRenderInfo = renderInfo;
+      }
       if (renderInfo && state.settings.notesVisible && state.activeAnnotationId === annotation.id) {
         renderAnnotationNote(annotation, state, renderInfo);
       }
     });
+
+    if (candidateDisplayRect) {
+      const pairedRenderInfo = activeRenderInfo && shouldShareToolRail(activeRenderInfo.frameRect, candidateDisplayRect)
+        ? activeRenderInfo
+        : null;
+      positionCandidateTools(candidateDisplayRect, pairedRenderInfo);
+    }
   }
 
-  function renderAnnotationBox(annotation, state) {
+  function renderAnnotationBox(annotation, state, candidateDisplayRect) {
     const color = PINFIX_COLOR_PRESETS[annotation.style.colorPreset].color;
     const lineWidth = PINFIX_LINE_WIDTHS[annotation.style.lineWidth];
     const labelSize = PINFIX_LABEL_SIZES[annotation.style.labelSize];
@@ -952,7 +1000,9 @@ function createUI(options) {
       : `0 0 0 1px ${stroke} inset, 0 10px 26px ${isActive ? `${color}3f` : `${color}24`}, 0 0 0 4px ${isActive ? `${color}18` : `${color}10`}`;
     overlayLayer.appendChild(box);
 
-    renderAnnotationTools(annotation, renderInfo, labelLayout.rect, isActive);
+    const shareCandidateRail = isActive && candidateDisplayRect && shouldShareToolRail(frameRect, candidateDisplayRect);
+    renderInfo.labelRect = labelLayout.rect;
+    renderAnnotationTools(annotation, renderInfo, labelLayout.rect, isActive, shareCandidateRail);
 
     const label = document.createElement('div');
     const missingNote = !String(annotation.note || '').trim();
@@ -977,16 +1027,9 @@ function createUI(options) {
     return renderInfo;
   }
 
-  function renderAnnotationTools(annotation, renderInfo, labelRect, isActive) {
-    const toolWidth = 116;
-    const toolHeight = 36;
+  function renderAnnotationTools(annotation, renderInfo, labelRect, isActive, reserveCandidateSlot) {
     const frameRect = renderInfo.frameRect;
-    const position = getToolsLayout(
-      frameRect,
-      labelRect,
-      toolWidth,
-      toolHeight
-    );
+    const position = getCompactToolRailLayout(frameRect, labelRect, 'annotation', reserveCandidateSlot);
     const tools = document.createElement('div');
     tools.className = `pinfix-inline-tools pinfix-annotation-tools ${isActive ? 'is-active' : ''}`;
     tools.style.left = `${position.pageLeft}px`;

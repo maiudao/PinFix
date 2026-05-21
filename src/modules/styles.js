@@ -413,18 +413,18 @@ function getPinFixStyles() {
 
 .pinfix-candidate-tools {
   position: absolute;
-  left: 50%;
-  top: 50%;
+  left: 0;
+  top: 0;
   display: flex;
-  gap: 5px;
+  gap: 3px;
   pointer-events: auto;
   z-index: 8;
-  padding: 3px;
+  padding: 2px;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.9);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
-  backdrop-filter: blur(12px);
+  background: rgba(248, 250, 252, 0.88);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
 }
 
 .pinfix-annotation-box {
@@ -510,32 +510,32 @@ function getPinFixStyles() {
   position: absolute;
   z-index: 6;
   display: flex;
-  gap: 5px;
+  gap: 3px;
   pointer-events: auto;
-  padding: 3px;
+  padding: 2px;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.9);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
-  backdrop-filter: blur(12px);
+  background: rgba(248, 250, 252, 0.88);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
 }
 
 .pinfix-candidate-tools button,
 .pinfix-inline-tools button {
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: 999px;
   background: rgba(30, 41, 59, 0.82);
   color: #ffffff;
-  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.16);
   cursor: pointer;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1;
-  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 
 .pinfix-candidate-tools button {
@@ -560,15 +560,15 @@ function getPinFixStyles() {
 
 .pinfix-candidate-tools .pinfix-icon,
 .pinfix-inline-tools .pinfix-icon {
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
 }
 
 .pinfix-candidate-tools button:hover,
 .pinfix-inline-tools button:hover {
   background: #0f766e;
-  box-shadow: 0 9px 18px rgba(15, 118, 110, 0.24);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(15, 118, 110, 0.22);
+  transform: translateY(-0.5px);
 }
 
 .pinfix-candidate-tools button:active,
