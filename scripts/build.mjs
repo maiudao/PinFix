@@ -26,10 +26,155 @@ const parts = [
 
 const chunks = [];
 
+function splitLongStringLiteral(raw, quote, maxLength = 1200) {
+  const parts = [];
+  let start = 0;
+
+  while (start < raw.length) {
+    let end = Math.min(start + maxLength, raw.length);
+
+    // Avoid ending a generated string chunk with an escape slash.
+    while (end > start && raw[end - 1] === '\\') {
+      end -= 1;
+    }
+
+    if (end === start) {
+      end = Math.min(start + maxLength, raw.length);
+    }
+
+    parts.push(raw.slice(start, end));
+    start = end;
+  }
+
+  return `(${parts.map((part) => `${quote}${part}${quote}`).join(' +\n')})`;
+}
+
+function splitLongStringTokens(content) {
+  let output = '';
+
+  for (let index = 0; index < content.length; index += 1) {
+    const quote = content[index];
+    if (quote !== '"' && quote !== "'") {
+      output += content[index];
+      continue;
+    }
+
+    let raw = '';
+    index += 1;
+
+    for (; index < content.length; index += 1) {
+      const character = content[index];
+      if (character === '\\') {
+        raw += character;
+        if (index + 1 < content.length) {
+          raw += content[index + 1];
+          index += 1;
+        }
+        continue;
+      }
+
+      if (character === quote) {
+        break;
+      }
+
+      raw += character;
+    }
+
+    output += raw.length > 2000 ? splitLongStringLiteral(raw, quote) : `${quote}${raw}${quote}`;
+  }
+
+  return output;
+}
+
+function wrapLongCodeLines(content, maxLength = 1400) {
+  let output = '';
+  let column = 0;
+  let quote = null;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index];
+    const next = content[index + 1];
+    output += character;
+    column += 1;
+
+    if (character === '\n') {
+      column = 0;
+      lineComment = false;
+      escaped = false;
+      continue;
+    }
+
+    if (lineComment) {
+      continue;
+    }
+
+    if (blockComment) {
+      if (character === '*' && next === '/') {
+        output += next;
+        index += 1;
+        column += 1;
+        blockComment = false;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (character === '/' && next === '/') {
+      lineComment = true;
+      continue;
+    }
+    if (character === '/' && next === '*') {
+      output += next;
+      index += 1;
+      column += 1;
+      blockComment = true;
+      continue;
+    }
+    if (character === '"' || character === "'" || character === '`') {
+      quote = character;
+      continue;
+    }
+
+    if (column > maxLength && (character === ';' || character === ',')) {
+      output += '\n';
+      column = 0;
+    }
+  }
+
+  return output;
+}
+
+function makeEditorFriendly(part, content) {
+  if (part !== 'vendor/html2canvas.min.js') {
+    return content;
+  }
+
+  // Tampermonkey's editor can freeze on very long minified vendor lines.
+  // Keep the userscript self-contained, but split html2canvas into editor-friendly lines.
+  return wrapLongCodeLines(splitLongStringTokens(content));
+}
+
 for (const part of parts) {
   const filePath = path.join(rootDir, part);
   const content = await readFile(filePath, 'utf8');
-  chunks.push(content.trimEnd());
+  chunks.push(makeEditorFriendly(part, content).trimEnd());
 }
 
 await mkdir(distDir, { recursive: true });
