@@ -125,6 +125,70 @@
         border-radius: 16px;
         background: rgba(15, 118, 110, 0.08);
       }
+
+      .edge-lab {
+        overflow: hidden;
+      }
+
+      .edge-wide-banner {
+        width: 100vw;
+        margin: 18px calc(50% - 50vw) 0;
+        padding: 22px 32px;
+        box-sizing: border-box;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: linear-gradient(90deg, #e9fbf6, #ffffff);
+        border-block: 1px solid rgba(15, 118, 110, 0.16);
+      }
+
+      .edge-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .edge-card {
+        min-height: 120px;
+        padding: 20px;
+        border-radius: 22px;
+        background: #f8fffc;
+        border: 1px solid rgba(15, 118, 110, 0.12);
+      }
+
+      .edge-card.is-left {
+        margin-left: -18px;
+      }
+
+      .edge-card.is-right {
+        margin-right: -18px;
+        text-align: right;
+      }
+
+      .edge-mini-button {
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 999px;
+        background: #0f766e;
+        color: #ffffff;
+        font-weight: 800;
+      }
+
+      .bottom-demo-bar {
+        position: sticky;
+        bottom: 12px;
+        margin-top: 28px;
+        padding: 14px 18px;
+        border-radius: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #173534;
+        color: #ffffff;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+      }
     </style>
   </head>
   <body>
@@ -189,6 +253,28 @@
         <p>PinFix 应该尽量保持轻量，不打断原网页使用，同时又能把“点哪里、怎么改、为什么改”整理得足够清楚。</p>
         <p>这个段落没有复杂功能，主要用于验证文本块、长页面和滚动场景的框选体验。</p>
         <p>如果后续要升级成浏览器扩展，这个 demo 也可以继续拿来做回归验证。</p>
+      </section>
+      <section class="panel edge-lab">
+        <h2>Edge Safe Test Lab</h2>
+        <p class="muted">Use these blocks to test top, left, right, full-width and bottom edge annotation behavior.</p>
+        <div class="edge-wide-banner">
+          <strong>Full width banner touching viewport sides</strong>
+          <button class="edge-mini-button" type="button">OK</button>
+        </div>
+        <div class="edge-row">
+          <article class="edge-card is-left">
+            <h3>Left edge card</h3>
+            <p class="muted">The note panel should avoid the PinFix toolbar.</p>
+          </article>
+          <article class="edge-card is-right">
+            <h3>Right edge card</h3>
+            <p class="muted">The label and buttons should stay visible near the scrollbar.</p>
+          </article>
+        </div>
+        <div class="bottom-demo-bar">
+          <span>Sticky bottom operation bar</span>
+          <button class="edge-mini-button" type="button">Go</button>
+        </div>
       </section>
     </main>
 

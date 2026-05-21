@@ -1419,14 +1419,15 @@ function getPinFixStyles() {
   left: 50%;
   top: 50%;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   pointer-events: auto;
   z-index: 8;
-  padding: 2px;
+  padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
 }
 
 .pinfix-annotation-box {
@@ -1460,6 +1461,7 @@ function getPinFixStyles() {
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.24);
   text-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
   pointer-events: none;
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
 .pinfix-label.is-interactive {
@@ -1472,17 +1474,23 @@ function getPinFixStyles() {
   transform: scale(1.08);
 }
 
+.pinfix-label.is-inside {
+  border-width: 2px !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.52) inset;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.32);
+}
+
 .pinfix-label.has-missing-note::after {
   content: "";
   position: absolute;
-  right: -2px;
-  top: -2px;
-  width: 8px;
-  height: 8px;
+  right: -1px;
+  top: -1px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: #ef233c;
   border: 2px solid #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.26);
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
 }
 
 .pinfix-mask {
@@ -1505,13 +1513,14 @@ function getPinFixStyles() {
   position: absolute;
   z-index: 6;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   pointer-events: auto;
-  padding: 2px;
+  padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
 }
 
 .pinfix-candidate-tools button,
@@ -1521,18 +1530,19 @@ function getPinFixStyles() {
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.76);
+  background: rgba(30, 41, 59, 0.82);
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.18);
   cursor: pointer;
   display: grid;
   place-items: center;
   font-size: 13px;
   line-height: 1;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
 .pinfix-candidate-tools button {
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(30, 41, 59, 0.84);
 }
 
 .pinfix-annotation-tools {
@@ -1560,6 +1570,18 @@ function getPinFixStyles() {
 .pinfix-candidate-tools button:hover,
 .pinfix-inline-tools button:hover {
   background: #0f766e;
+  box-shadow: 0 9px 18px rgba(15, 118, 110, 0.24);
+  transform: translateY(-1px);
+}
+
+.pinfix-candidate-tools button:active,
+.pinfix-inline-tools button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.pinfix-inline-tools button[data-action="delete-annotation"],
+.pinfix-inline-tools button[data-action="delete-mask"] {
+  background: rgba(71, 85, 105, 0.82);
 }
 
 .pinfix-mask-tools button {
@@ -1596,13 +1618,14 @@ function getPinFixStyles() {
   position: absolute;
   z-index: 25;
   width: min(320px, calc(100vw - 24px));
-  border-radius: 14px;
-  padding: 7px;
+  min-height: 104px;
+  border-radius: 16px;
+  padding: 9px;
   border-top-width: 2px;
 }
 
 .pinfix-note-card.is-focused {
-  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.24), 0 14px 28px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.22), 0 14px 30px rgba(15, 23, 42, 0.14);
 }
 
 .pinfix-note-card.is-dark,
@@ -1619,8 +1642,8 @@ function getPinFixStyles() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 7px;
+  margin-bottom: 6px;
 }
 
 .pinfix-note-badge {
@@ -1637,9 +1660,11 @@ function getPinFixStyles() {
 .pinfix-note-title {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   color: inherit;
-  opacity: 0.72;
+  opacity: 0.74;
 }
 
 .pinfix-note-delete {
@@ -1654,6 +1679,22 @@ function getPinFixStyles() {
   display: grid;
   place-items: center;
   line-height: 1;
+  border-radius: 999px;
+  opacity: 0.82;
+  transition: background 140ms ease, opacity 140ms ease, transform 140ms ease;
+}
+
+.pinfix-note-delete:hover {
+  background: rgba(15, 23, 42, 0.08);
+  opacity: 1;
+}
+
+.pinfix-note-card.is-dark .pinfix-note-delete:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pinfix-note-delete:active {
+  transform: scale(0.94);
 }
 
 .pinfix-note-input,
@@ -1669,7 +1710,7 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-input {
-  min-height: 64px;
+  min-height: 68px;
   max-height: 190px;
 }
 
@@ -1678,7 +1719,7 @@ function getPinFixStyles() {
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 0;
+  padding: 2px 0 4px;
   text-align: left;
   font-size: 13px;
   line-height: 1.4;
@@ -2182,6 +2223,22 @@ function createUI(options) {
     };
   }
 
+  function getOperationBounds() {
+    const bounds = { ...getSafeViewportBounds() };
+    const chromeBox = chrome ? chrome.getBoundingClientRect() : null;
+    if (chromeBox && chromeBox.width > 0 && chromeBox.height > 0) {
+      bounds.left = Math.max(bounds.left, window.scrollX + chromeBox.right + 12);
+    }
+
+    if (globalPanel && !globalPanel.classList.contains('pinfix-hidden')) {
+      bounds.bottom = Math.min(bounds.bottom, window.scrollY + globalPanel.getBoundingClientRect().top - 12);
+    } else if (globalStrip && !globalStrip.classList.contains('pinfix-hidden')) {
+      bounds.bottom = Math.min(bounds.bottom, window.scrollY + globalStrip.getBoundingClientRect().top - 12);
+    }
+
+    return bounds;
+  }
+
   function overlapsViewport(rect, bounds) {
     return (
       rect.pageLeft + rect.width > bounds.left &&
@@ -2208,6 +2265,14 @@ function createUI(options) {
       width: Math.max(right - left, minWidth),
       height: Math.max(bottom - top, minHeight)
     };
+  }
+
+  function clampWithin(value, min, max) {
+    if (max < min) {
+      return min;
+    }
+
+    return clamp(value, min, max);
   }
 
   function getVisibleRect(rect) {
@@ -2250,35 +2315,121 @@ function createUI(options) {
       return null;
     }
 
-    return { boxRect: rect, visibleRect };
+    return {
+      originalRect: rect,
+      visibleRect,
+      frameRect: visibleRect
+    };
   }
 
   function getFloatingPosition(preferredLeft, preferredTop, width, height) {
     const bounds = getSafeViewportBounds();
+    return getFloatingPositionInBounds(preferredLeft, preferredTop, width, height, bounds);
+  }
+
+  function getFloatingPositionInBounds(preferredLeft, preferredTop, width, height, bounds) {
     return {
-      pageLeft: clamp(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
-      pageTop: clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
+      pageLeft: clampWithin(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
+      pageTop: clampWithin(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
     };
   }
 
-  function getNaturalFloatingPosition(preferredLeft, preferredTop, width, height, clampVertical) {
+  function rectsOverlap(leftRect, rightRect) {
+    return (
+      leftRect.pageLeft < rightRect.pageLeft + rightRect.width &&
+      leftRect.pageLeft + leftRect.width > rightRect.pageLeft &&
+      leftRect.pageTop < rightRect.pageTop + rightRect.height &&
+      leftRect.pageTop + leftRect.height > rightRect.pageTop
+    );
+  }
+
+  function getLabelLayout(frameRect, labelSize) {
     const bounds = getSafeViewportBounds();
+    const outsideTop = frameRect.pageTop - labelSize * 0.55;
+    const outsideLeft = frameRect.pageLeft + frameRect.width - labelSize - 18;
+    const outsideFits = (
+      outsideTop >= bounds.top &&
+      outsideLeft >= bounds.left &&
+      outsideLeft + labelSize <= bounds.right
+    );
+
+    if (outsideFits) {
+      return {
+        mode: 'outside',
+        size: labelSize,
+        rect: {
+          pageLeft: outsideLeft,
+          pageTop: outsideTop,
+          width: labelSize,
+          height: labelSize
+        }
+      };
+    }
+
+    const innerGap = 8;
+    const innerSize = Math.max(28, Math.min(labelSize, Math.min(frameRect.width, frameRect.height) - innerGap * 2));
     return {
-      pageLeft: clamp(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
-      pageTop: clampVertical
-        ? clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
-        : preferredTop
+      mode: 'inside',
+      size: innerSize,
+      rect: {
+        pageLeft: clampWithin(
+          frameRect.pageLeft + frameRect.width - innerSize - innerGap,
+          bounds.left,
+          Math.min(bounds.right - innerSize, frameRect.pageLeft + frameRect.width - innerSize - innerGap)
+        ),
+        pageTop: clampWithin(
+          frameRect.pageTop + innerGap,
+          bounds.top,
+          Math.min(bounds.bottom - innerSize, frameRect.pageTop + frameRect.height - innerSize - innerGap)
+        ),
+        width: innerSize,
+        height: innerSize
+      }
     };
+  }
+
+  function getToolsLayout(frameRect, labelRect, toolWidth, toolHeight) {
+    const bounds = getOperationBounds();
+    const candidates = [
+      {
+        pageLeft: frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2,
+        pageTop: frameRect.pageTop + frameRect.height / 2 - toolHeight / 2
+      },
+      {
+        pageLeft: frameRect.pageLeft + 12,
+        pageTop: frameRect.pageTop + frameRect.height / 2 - toolHeight / 2
+      },
+      {
+        pageLeft: frameRect.pageLeft + frameRect.width - toolWidth - 12,
+        pageTop: frameRect.pageTop + frameRect.height / 2 - toolHeight / 2
+      },
+      {
+        pageLeft: frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2,
+        pageTop: frameRect.pageTop + frameRect.height + 8
+      }
+    ];
+
+    const best = candidates
+      .map((item) => getFloatingPositionInBounds(item.pageLeft, item.pageTop, toolWidth, toolHeight, bounds))
+      .find((item) => !rectsOverlap({ ...item, width: toolWidth, height: toolHeight }, labelRect));
+
+    return best || getFloatingPositionInBounds(
+      frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2,
+      frameRect.pageTop + frameRect.height / 2 - toolHeight / 2,
+      toolWidth,
+      toolHeight,
+      bounds
+    );
   }
 
   function renderAnnotations(state) {
     const candidatePadding = PINFIX_BOX_PADDING_OPTIONS[state.settings.boxPadding] || 0;
     candidate.innerHTML = `
       <div class="pinfix-candidate-tools">
-        <button type="button" data-action="candidate-adjust" data-direction="-1" title="${escapeHtml(t('tipShrink'))}">${iconSvg('minus')}</button>
-        <button type="button" data-action="candidate-adjust" data-direction="1" title="${escapeHtml(t('tipExpand'))}">${iconSvg('plus')}</button>
-        <button type="button" data-action="candidate-pick" data-kind="annotate" title="${escapeHtml(t('tipSelectMode'))}">${iconSvg('edit')}</button>
-        <button type="button" data-action="candidate-pick" data-kind="mask" title="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
+        <button type="button" data-action="candidate-adjust" data-direction="-1" title="${escapeHtml(t('tipShrink'))}" aria-label="${escapeHtml(t('tipShrink'))}">${iconSvg('minus')}</button>
+        <button type="button" data-action="candidate-adjust" data-direction="1" title="${escapeHtml(t('tipExpand'))}" aria-label="${escapeHtml(t('tipExpand'))}">${iconSvg('plus')}</button>
+        <button type="button" data-action="candidate-pick" data-kind="annotate" title="${escapeHtml(t('tipSelectMode'))}" aria-label="${escapeHtml(t('tipSelectMode'))}">${iconSvg('edit')}</button>
+        <button type="button" data-action="candidate-pick" data-kind="mask" title="${escapeHtml(t('actionMaskArea'))}" aria-label="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
       </div>
     `;
 
@@ -2335,42 +2486,37 @@ function createUI(options) {
     if (!renderInfo) {
       return null;
     }
+    const frameRect = renderInfo.frameRect;
+    const labelLayout = getLabelLayout(frameRect, labelSize);
 
     const box = document.createElement('div');
     box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''}`;
     box.dataset.action = 'activate-annotation';
     box.dataset.id = annotation.id;
-    box.style.left = `${boxRect.pageLeft}px`;
-    box.style.top = `${boxRect.pageTop}px`;
-    box.style.width = `${Math.max(boxRect.width, 8)}px`;
-    box.style.height = `${Math.max(boxRect.height, 8)}px`;
+    box.style.left = `${frameRect.pageLeft}px`;
+    box.style.top = `${frameRect.pageTop}px`;
+    box.style.width = `${Math.max(frameRect.width, 8)}px`;
+    box.style.height = `${Math.max(frameRect.height, 8)}px`;
     box.style.border = `${lineWidth}px solid ${color}`;
     box.style.boxShadow = isFocused
-      ? `0 0 0 2px rgba(245, 158, 11, 0.9), 0 0 22px rgba(245, 158, 11, 0.38), 0 0 0 1px ${stroke} inset`
-      : `0 0 0 1px ${stroke} inset, 0 0 18px ${isActive ? `${color}55` : `${color}33`}`;
+      ? `0 0 0 2px rgba(245, 158, 11, 0.86), 0 12px 28px rgba(245, 158, 11, 0.26), 0 0 0 1px ${stroke} inset`
+      : `0 0 0 1px ${stroke} inset, 0 10px 26px ${isActive ? `${color}3f` : `${color}24`}, 0 0 0 4px ${isActive ? `${color}18` : `${color}10`}`;
     overlayLayer.appendChild(box);
 
-    renderAnnotationTools(annotation, renderInfo, isActive);
+    renderAnnotationTools(annotation, renderInfo, labelLayout.rect, isActive);
 
     const label = document.createElement('div');
     const missingNote = !String(annotation.note || '').trim();
-    label.className = `pinfix-label ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''} ${missingNote ? 'has-missing-note' : ''}`;
+    label.className = `pinfix-label ${labelLayout.mode === 'inside' ? 'is-inside' : ''} ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''} ${missingNote ? 'has-missing-note' : ''}`;
     label.dataset.action = 'activate-annotation';
     label.dataset.id = annotation.id;
     label.title = t('changeRequest');
     label.textContent = String(annotation.number);
-    const labelPosition = getNaturalFloatingPosition(
-      boxRect.pageLeft + boxRect.width - labelSize - 18,
-      boxRect.pageTop - labelSize * 0.55,
-      labelSize,
-      labelSize,
-      boxRect.pageTop >= getSafeViewportBounds().top
-    );
-    label.style.left = `${labelPosition.pageLeft}px`;
-    label.style.top = `${labelPosition.pageTop}px`;
-    label.style.width = `${labelSize}px`;
-    label.style.height = `${labelSize}px`;
-    label.style.fontSize = `${Math.round(labelSize * 0.52)}px`;
+    label.style.left = `${labelLayout.rect.pageLeft}px`;
+    label.style.top = `${labelLayout.rect.pageTop}px`;
+    label.style.width = `${labelLayout.size}px`;
+    label.style.height = `${labelLayout.size}px`;
+    label.style.fontSize = `${Math.round(labelLayout.size * 0.52)}px`;
     label.style.background = annotation.style.labelStyle === 'ring' ? '#ffffff' : color;
     label.style.color = annotation.style.labelStyle === 'ring' ? color : '#ffffff';
     label.style.border = `3px solid ${stroke}`;
@@ -2382,13 +2528,13 @@ function createUI(options) {
     return renderInfo;
   }
 
-  function renderAnnotationTools(annotation, renderInfo, isActive) {
+  function renderAnnotationTools(annotation, renderInfo, labelRect, isActive) {
     const toolWidth = 116;
     const toolHeight = 36;
-    const visibleRect = renderInfo.visibleRect;
-    const position = getFloatingPosition(
-      visibleRect.pageLeft + visibleRect.width / 2 - toolWidth / 2,
-      visibleRect.pageTop + visibleRect.height / 2 - toolHeight / 2,
+    const frameRect = renderInfo.frameRect;
+    const position = getToolsLayout(
+      frameRect,
+      labelRect,
       toolWidth,
       toolHeight
     );
@@ -2397,9 +2543,9 @@ function createUI(options) {
     tools.style.left = `${position.pageLeft}px`;
     tools.style.top = `${position.pageTop}px`;
     tools.innerHTML = `
-      <button type="button" data-action="edit-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionEditNote'))}">${iconSvg('edit')}</button>
-      <button type="button" data-action="mask-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
-      <button type="button" data-action="delete-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionDelete'))}">${iconSvg('close')}</button>
+      <button type="button" data-action="edit-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionEditNote'))}" aria-label="${escapeHtml(t('actionEditNote'))}">${iconSvg('edit')}</button>
+      <button type="button" data-action="mask-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionMaskArea'))}" aria-label="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
+      <button type="button" data-action="delete-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionDelete'))}" aria-label="${escapeHtml(t('actionDelete'))}">${iconSvg('close')}</button>
     `;
     overlayLayer.appendChild(tools);
   }
@@ -2414,9 +2560,9 @@ function createUI(options) {
     element.innerHTML = `
       <div class="pinfix-mask-label">${escapeHtml(t('maskLabel'))}</div>
       <div class="pinfix-inline-tools pinfix-mask-tools">
-        <button type="button" data-action="adjust-mask" data-id="${mask.id}" data-delta="-8" title="${escapeHtml(t('actionShrinkMask'))}">${iconSvg('minus')}</button>
-        <button type="button" data-action="adjust-mask" data-id="${mask.id}" data-delta="8" title="${escapeHtml(t('actionExpandMask'))}">${iconSvg('plus')}</button>
-        <button type="button" data-action="delete-mask" data-id="${mask.id}" title="${escapeHtml(t('actionDeleteMask'))}">${iconSvg('close')}</button>
+        <button type="button" data-action="adjust-mask" data-id="${mask.id}" data-delta="-8" title="${escapeHtml(t('actionShrinkMask'))}" aria-label="${escapeHtml(t('actionShrinkMask'))}">${iconSvg('minus')}</button>
+        <button type="button" data-action="adjust-mask" data-id="${mask.id}" data-delta="8" title="${escapeHtml(t('actionExpandMask'))}" aria-label="${escapeHtml(t('actionExpandMask'))}">${iconSvg('plus')}</button>
+        <button type="button" data-action="delete-mask" data-id="${mask.id}" title="${escapeHtml(t('actionDeleteMask'))}" aria-label="${escapeHtml(t('actionDeleteMask'))}">${iconSvg('close')}</button>
       </div>
     `;
     overlayLayer.appendChild(element);
@@ -2424,17 +2570,17 @@ function createUI(options) {
 
   function getNotePosition(renderInfo) {
     const estimatedHeight = 122;
-    const cardWidth = Math.max(220, Math.min(320, window.innerWidth - viewportMargin * 2));
-    const boxRect = renderInfo.visibleRect;
-    const bounds = getSafeViewportBounds();
+    const bounds = getOperationBounds();
+    const cardWidth = Math.max(220, Math.min(320, bounds.right - bounds.left));
+    const boxRect = renderInfo.frameRect;
     const defaultTop = boxRect.pageTop + boxRect.height;
     const shouldFlip = defaultTop + estimatedHeight > bounds.bottom && boxRect.pageTop - estimatedHeight >= bounds.top;
     const rightAlignedLeft = boxRect.pageLeft + boxRect.width - cardWidth;
     const preferredTop = shouldFlip ? boxRect.pageTop - estimatedHeight : defaultTop;
 
     return {
-      left: clamp(rightAlignedLeft, bounds.left, Math.max(bounds.left, bounds.right - cardWidth)),
-      top: clamp(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - estimatedHeight)),
+      left: clampWithin(rightAlignedLeft, bounds.left, Math.max(bounds.left, bounds.right - cardWidth)),
+      top: clampWithin(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - estimatedHeight)),
       width: cardWidth
     };
   }
@@ -2455,7 +2601,7 @@ function createUI(options) {
       <div class="pinfix-note-head">
         <div class="pinfix-note-badge" style="background:${color}">${annotation.number}</div>
         <strong class="pinfix-note-title">${escapeHtml(t('changeRequest'))}</strong>
-        <button class="pinfix-note-delete" type="button" data-action="delete-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionDelete'))}">&times;</button>
+        <button class="pinfix-note-delete" type="button" data-action="delete-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionDelete'))}" aria-label="${escapeHtml(t('actionDelete'))}">&times;</button>
       </div>
       <button class="pinfix-note-summary ${isEditing ? 'pinfix-hidden' : ''}" type="button" data-action="edit-annotation" data-id="${annotation.id}">${escapeHtml(summaryText)}</button>
       <textarea

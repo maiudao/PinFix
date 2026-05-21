@@ -278,14 +278,15 @@ function getPinFixStyles() {
   left: 50%;
   top: 50%;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   pointer-events: auto;
   z-index: 8;
-  padding: 2px;
+  padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
 }
 
 .pinfix-annotation-box {
@@ -319,6 +320,7 @@ function getPinFixStyles() {
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.24);
   text-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
   pointer-events: none;
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
 .pinfix-label.is-interactive {
@@ -331,17 +333,23 @@ function getPinFixStyles() {
   transform: scale(1.08);
 }
 
+.pinfix-label.is-inside {
+  border-width: 2px !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.52) inset;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.32);
+}
+
 .pinfix-label.has-missing-note::after {
   content: "";
   position: absolute;
-  right: -2px;
-  top: -2px;
-  width: 8px;
-  height: 8px;
+  right: -1px;
+  top: -1px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: #ef233c;
   border: 2px solid #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.26);
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
 }
 
 .pinfix-mask {
@@ -364,13 +372,14 @@ function getPinFixStyles() {
   position: absolute;
   z-index: 6;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   pointer-events: auto;
-  padding: 2px;
+  padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
 }
 
 .pinfix-candidate-tools button,
@@ -380,18 +389,19 @@ function getPinFixStyles() {
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.76);
+  background: rgba(30, 41, 59, 0.82);
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.18);
   cursor: pointer;
   display: grid;
   place-items: center;
   font-size: 13px;
   line-height: 1;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
 .pinfix-candidate-tools button {
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(30, 41, 59, 0.84);
 }
 
 .pinfix-annotation-tools {
@@ -419,6 +429,18 @@ function getPinFixStyles() {
 .pinfix-candidate-tools button:hover,
 .pinfix-inline-tools button:hover {
   background: #0f766e;
+  box-shadow: 0 9px 18px rgba(15, 118, 110, 0.24);
+  transform: translateY(-1px);
+}
+
+.pinfix-candidate-tools button:active,
+.pinfix-inline-tools button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.pinfix-inline-tools button[data-action="delete-annotation"],
+.pinfix-inline-tools button[data-action="delete-mask"] {
+  background: rgba(71, 85, 105, 0.82);
 }
 
 .pinfix-mask-tools button {
@@ -455,13 +477,14 @@ function getPinFixStyles() {
   position: absolute;
   z-index: 25;
   width: min(320px, calc(100vw - 24px));
-  border-radius: 14px;
-  padding: 7px;
+  min-height: 104px;
+  border-radius: 16px;
+  padding: 9px;
   border-top-width: 2px;
 }
 
 .pinfix-note-card.is-focused {
-  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.24), 0 14px 28px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.22), 0 14px 30px rgba(15, 23, 42, 0.14);
 }
 
 .pinfix-note-card.is-dark,
@@ -478,8 +501,8 @@ function getPinFixStyles() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 7px;
+  margin-bottom: 6px;
 }
 
 .pinfix-note-badge {
@@ -496,9 +519,11 @@ function getPinFixStyles() {
 .pinfix-note-title {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   color: inherit;
-  opacity: 0.72;
+  opacity: 0.74;
 }
 
 .pinfix-note-delete {
@@ -513,6 +538,22 @@ function getPinFixStyles() {
   display: grid;
   place-items: center;
   line-height: 1;
+  border-radius: 999px;
+  opacity: 0.82;
+  transition: background 140ms ease, opacity 140ms ease, transform 140ms ease;
+}
+
+.pinfix-note-delete:hover {
+  background: rgba(15, 23, 42, 0.08);
+  opacity: 1;
+}
+
+.pinfix-note-card.is-dark .pinfix-note-delete:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pinfix-note-delete:active {
+  transform: scale(0.94);
 }
 
 .pinfix-note-input,
@@ -528,7 +569,7 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-input {
-  min-height: 64px;
+  min-height: 68px;
   max-height: 190px;
 }
 
@@ -537,7 +578,7 @@ function getPinFixStyles() {
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 0;
+  padding: 2px 0 4px;
   text-align: left;
   font-size: 13px;
   line-height: 1.4;
