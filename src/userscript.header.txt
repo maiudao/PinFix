@@ -11,7 +11,8 @@
 // @include      https://127.0.0.1:*/*
 // @include      http://[::1]:*/*
 // @include      https://[::1]:*/*
-// @grant        none
+// @grant        GM_addStyle
+// @sandbox      DOM
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==

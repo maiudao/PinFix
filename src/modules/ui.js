@@ -47,8 +47,13 @@ function createUI(options) {
     return `<svg class="pinfix-icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || ''}</svg>`;
   }
 
-  function mount() {
-    if (root) {
+  function injectPinFixStyles() {
+    if (document.getElementById('pinfix-style')) {
+      return;
+    }
+
+    if (typeof GM_addStyle === 'function') {
+      GM_addStyle(getPinFixStyles());
       return;
     }
 
@@ -56,6 +61,14 @@ function createUI(options) {
     style.id = 'pinfix-style';
     style.textContent = getPinFixStyles();
     document.head.appendChild(style);
+  }
+
+  function mount() {
+    if (root) {
+      return;
+    }
+
+    injectPinFixStyles();
 
     root = document.createElement('div');
     root.id = 'pinfix-root';
