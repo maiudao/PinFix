@@ -5,6 +5,7 @@ function createPinFixApp() {
   let countdownTimer = null;
   let focusTimer = null;
   let refreshScheduled = false;
+  let lastScreenshotBlob = null;
   let lastUrl = storage.normaliseUrl(window.location.href);
   let routeWatcherAttached = false;
 
@@ -49,6 +50,7 @@ function createPinFixApp() {
       render();
     },
     onTool: (tool) => handleTool(tool),
+    onQuickScreenshot: () => quickScreenshot(),
     onSetSetting: (key, value) => updateSetting(key, value),
     onRun: (name) => runNamedAction(name),
     onDeleteAnnotation: (id) => deleteAnnotation(id),
@@ -194,9 +196,14 @@ function createPinFixApp() {
     ui.render(state);
   }
 
-  function showToast(keyOrText) {
+  function showToast(keyOrText, toastOptions = {}) {
     const translated = i18n.t(getLanguage(), keyOrText);
-    state.toast = translated === keyOrText ? keyOrText : translated;
+    state.toast = {
+      message: translated === keyOrText ? keyOrText : translated,
+      actionName: toastOptions.actionName || '',
+      actionLabel: toastOptions.actionLabelKey ? i18n.t(getLanguage(), toastOptions.actionLabelKey) : '',
+      tone: toastOptions.tone || ''
+    };
     render();
 
     if (toastTimer) {
@@ -206,7 +213,7 @@ function createPinFixApp() {
     toastTimer = window.setTimeout(() => {
       state.toast = '';
       render();
-    }, 1800);
+    }, toastOptions.duration || 1800);
   }
 
   function takeHistorySnapshot() {
@@ -508,6 +515,7 @@ function createPinFixApp() {
     clearPendingActionConfirm();
     savePageData();
     render();
+    showToast('pageCleared');
   }
 
   function clearMasks() {
@@ -711,10 +719,49 @@ function createPinFixApp() {
       const result = await exporters.exportViewportImage({
         preferClipboard
       });
+      lastScreenshotBlob = result.blob || null;
       showToast(result.copied ? 'copiedImage' : 'downloadedImage');
     } catch (error) {
       showToast(i18n.t(getLanguage(), 'exportLimit'));
     }
+  }
+
+  async function quickScreenshot() {
+    try {
+      state.activePopover = null;
+      render();
+      const result = await exporters.exportViewportImage({
+        preferClipboard: true
+      });
+      lastScreenshotBlob = result.blob || null;
+
+      if (result.copied) {
+        showToast('screenshotCopiedPaste', {
+          actionName: 'save-last-screenshot',
+          actionLabelKey: 'saveLocally',
+          duration: 6500,
+          tone: 'success'
+        });
+        return;
+      }
+
+      showToast('screenshotDownloadedFallback', {
+        duration: 6500,
+        tone: 'success'
+      });
+    } catch (error) {
+      showToast(i18n.t(getLanguage(), 'exportLimit'), { duration: 3600 });
+    }
+  }
+
+  function saveLastScreenshot() {
+    if (!lastScreenshotBlob) {
+      showToast('noRecentScreenshot');
+      return;
+    }
+
+    exporters.downloadBlob(lastScreenshotBlob, `pinfix-${Date.now()}.png`);
+    showToast('downloadedImage');
   }
 
   function stopScreenshotMode(notify) {
@@ -800,6 +847,10 @@ function createPinFixApp() {
     }
     if (name === 'copy-image') {
       exportImage(true);
+      return;
+    }
+    if (name === 'save-last-screenshot') {
+      saveLastScreenshot();
     }
   }
 

@@ -8,8 +8,18 @@ function createUI(options) {
   let globalPanel = null;
   let toast = null;
   let countdown = null;
+  let tooltip = null;
+  let sidecar = null;
   let candidate = null;
   let resizeCleanup = null;
+  let toolClickTimer = null;
+  let lastCaptureClickAt = 0;
+  let lastQuickScreenshotAt = 0;
+  let tooltipTarget = null;
+  let sidecarOpen = false;
+  let sidecarLocked = false;
+  let sidecarCloseTimer = null;
+  let latestState = null;
   const viewportMargin = 12;
 
   function getLanguage() {
@@ -58,9 +68,11 @@ function createUI(options) {
       <div class="pinfix-overlay-layer"></div>
       <div class="pinfix-note-layer"></div>
       <div class="pinfix-popover pinfix-hidden" data-html2canvas-ignore="true"></div>
+      <div class="pinfix-sidecar pinfix-hidden" data-html2canvas-ignore="true"></div>
       <button class="pinfix-global-strip" type="button" data-action="toggle-global"></button>
       <div class="pinfix-global-panel pinfix-hidden" data-html2canvas-ignore="true"></div>
       <div class="pinfix-toast pinfix-hidden" data-html2canvas-ignore="true"></div>
+      <div class="pinfix-tooltip pinfix-hidden" data-html2canvas-ignore="true"></div>
       <div class="pinfix-countdown pinfix-hidden"></div>
     `;
 
@@ -70,20 +82,23 @@ function createUI(options) {
     overlayLayer = root.querySelector('.pinfix-overlay-layer');
     noteLayer = root.querySelector('.pinfix-note-layer');
     popover = root.querySelector('.pinfix-popover');
+    sidecar = root.querySelector('.pinfix-sidecar');
     globalStrip = root.querySelector('.pinfix-global-strip');
     globalPanel = root.querySelector('.pinfix-global-panel');
     toast = root.querySelector('.pinfix-toast');
+    tooltip = root.querySelector('.pinfix-tooltip');
     countdown = root.querySelector('.pinfix-countdown');
     candidate = document.createElement('div');
     candidate.className = 'pinfix-candidate pinfix-hidden';
     overlayLayer.appendChild(candidate);
 
     root.addEventListener('click', handleClick);
+    root.addEventListener('dblclick', handleDoubleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('focusin', handleFocusIn);
     root.addEventListener('focusout', handleFocusOut);
-    root.addEventListener('mouseenter', handleMouseEnter, true);
-    root.addEventListener('mouseleave', handleMouseLeave, true);
+    root.addEventListener('pointerover', handlePointerOver);
+    root.addEventListener('pointerout', handlePointerOut);
 
     document.addEventListener('pointerdown', handleDocumentPointerDown, true);
   }
@@ -97,6 +112,8 @@ function createUI(options) {
       resizeCleanup();
       resizeCleanup = null;
     }
+    window.clearTimeout(toolClickTimer);
+    cancelSidecarClose();
 
     document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
     root.remove();
@@ -109,7 +126,14 @@ function createUI(options) {
     }
 
     if (!root.contains(event.target)) {
+      closeAnnotationSidecar();
+      hideTooltip();
       options.onClosePopover();
+      return;
+    }
+
+    if (sidecarLocked && !event.target.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger')) {
+      closeAnnotationSidecar();
     }
   }
 
@@ -139,7 +163,25 @@ function createUI(options) {
       options.onToggleGlobal(false);
     }
     if (action === 'tool') {
-      options.onTool(actionTarget.dataset.tool);
+      if (actionTarget.dataset.tool === 'capture') {
+        const now = Date.now();
+        const isFastSecondClick = now - lastCaptureClickAt < 420;
+        lastCaptureClickAt = now;
+        window.clearTimeout(toolClickTimer);
+        toolClickTimer = null;
+        if (event.detail >= 2 || isFastSecondClick) {
+          runQuickScreenshotShortcut();
+          return;
+        }
+        toolClickTimer = window.setTimeout(() => {
+          toolClickTimer = null;
+          options.onTool(actionTarget.dataset.tool);
+        }, 300);
+      } else {
+        window.clearTimeout(toolClickTimer);
+        toolClickTimer = null;
+        options.onTool(actionTarget.dataset.tool);
+      }
     }
     if (action === 'set-setting') {
       options.onSetSetting(actionTarget.dataset.key, actionTarget.dataset.value);
@@ -177,6 +219,31 @@ function createUI(options) {
     if (action === 'edit-annotation') {
       options.onEditAnnotation(actionTarget.dataset.id);
     }
+    if (action === 'toggle-annotation-sidecar') {
+      toggleAnnotationSidecar(true);
+    }
+  }
+
+  function handleDoubleClick(event) {
+    const actionTarget = event.target.closest('[data-action="tool"][data-tool="capture"]');
+    if (!actionTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    window.clearTimeout(toolClickTimer);
+    toolClickTimer = null;
+    if (Date.now() - lastQuickScreenshotAt < 500) {
+      return;
+    }
+    runQuickScreenshotShortcut();
+  }
+
+  function runQuickScreenshotShortcut() {
+    lastQuickScreenshotAt = Date.now();
+    hideTooltip();
+    closeAnnotationSidecar();
+    options.onQuickScreenshot();
   }
 
   function handleInput(event) {
@@ -199,6 +266,15 @@ function createUI(options) {
   }
 
   function handleFocusIn(event) {
+    const nextTooltipTarget = getTooltipTarget(event.target);
+    if (nextTooltipTarget) {
+      showTooltip(nextTooltipTarget);
+    }
+
+    if (event.target.closest && event.target.closest('.pinfix-annotation-sidecar-trigger')) {
+      openAnnotationSidecar(false);
+    }
+
     const textarea = event.target;
     if (textarea instanceof HTMLTextAreaElement && textarea.dataset.noteId) {
       setCardExpanded(textarea.closest('.pinfix-note-card'), true);
@@ -206,6 +282,15 @@ function createUI(options) {
   }
 
   function handleFocusOut(event) {
+    const nextFocus = event.relatedTarget;
+    if (!nextFocus || !root.contains(nextFocus) || !nextFocus.closest('[data-tooltip]')) {
+      hideTooltip();
+    }
+
+    if (!sidecarLocked && (!nextFocus || !nextFocus.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger'))) {
+      scheduleSidecarClose();
+    }
+
     const textarea = event.target;
     if (!(textarea instanceof HTMLTextAreaElement)) {
       return;
@@ -217,12 +302,32 @@ function createUI(options) {
     }
   }
 
-  function handleMouseEnter() {
-    // Notes now use click-to-activate. Hover should not open or close editing UI.
+  function handlePointerOver(event) {
+    const nextTooltipTarget = getTooltipTarget(event.target);
+    if (nextTooltipTarget && !nextTooltipTarget.contains(event.relatedTarget)) {
+      showTooltip(nextTooltipTarget);
+    }
+
+    if (event.target.closest && event.target.closest('.pinfix-annotation-sidecar-trigger')) {
+      openAnnotationSidecar(false);
+    }
+
+    if (event.target.closest && event.target.closest('.pinfix-sidecar')) {
+      cancelSidecarClose();
+    }
   }
 
-  function handleMouseLeave() {
-    // Keep the active note stable while the user moves between the box, tools, and input.
+  function handlePointerOut(event) {
+    const currentTooltipTarget = getTooltipTarget(event.target);
+    if (currentTooltipTarget && !currentTooltipTarget.contains(event.relatedTarget)) {
+      hideTooltip();
+    }
+
+    const leavingSidecarArea = event.target.closest
+      && event.target.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger');
+    if (leavingSidecarArea && !leavingSidecarArea.contains(event.relatedTarget)) {
+      scheduleSidecarClose();
+    }
   }
 
   function autoGrow(textarea, maxHeight) {
@@ -261,6 +366,101 @@ function createUI(options) {
     summary.classList.toggle('pinfix-hidden', expanded);
   }
 
+  function getTooltipTarget(target) {
+    if (!(target instanceof Element)) {
+      return null;
+    }
+
+    return target.closest('[data-tooltip]');
+  }
+
+  function showTooltip(target) {
+    if (!tooltip || !target || !target.dataset.tooltip) {
+      return;
+    }
+
+    tooltipTarget = target;
+    tooltip.textContent = target.dataset.tooltip;
+    tooltip.classList.remove('pinfix-hidden');
+    positionTooltip();
+  }
+
+  function positionTooltip() {
+    if (!tooltip || !tooltipTarget || !document.body.contains(tooltipTarget)) {
+      hideTooltip();
+      return;
+    }
+
+    const targetBox = tooltipTarget.getBoundingClientRect();
+    const tooltipBox = tooltip.getBoundingClientRect();
+    const left = clamp(targetBox.right + 10, viewportMargin, window.innerWidth - tooltipBox.width - viewportMargin);
+    const top = clamp(
+      targetBox.top + targetBox.height / 2 - tooltipBox.height / 2,
+      viewportMargin,
+      window.innerHeight - tooltipBox.height - viewportMargin
+    );
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  function hideTooltip() {
+    tooltipTarget = null;
+    if (!tooltip) {
+      return;
+    }
+
+    tooltip.classList.add('pinfix-hidden');
+    tooltip.textContent = '';
+  }
+
+  function cancelSidecarClose() {
+    if (sidecarCloseTimer) {
+      window.clearTimeout(sidecarCloseTimer);
+      sidecarCloseTimer = null;
+    }
+  }
+
+  function scheduleSidecarClose() {
+    if (sidecarLocked) {
+      return;
+    }
+
+    cancelSidecarClose();
+    sidecarCloseTimer = window.setTimeout(() => {
+      const trigger = root.querySelector('.pinfix-annotation-sidecar-trigger');
+      const keepOpen = (trigger && trigger.matches(':hover')) || (sidecar && sidecar.matches(':hover'));
+      if (!keepOpen) {
+        closeAnnotationSidecar();
+      }
+    }, 120);
+  }
+
+  function openAnnotationSidecar(locked) {
+    cancelSidecarClose();
+    sidecarOpen = true;
+    sidecarLocked = Boolean(locked) || sidecarLocked;
+    renderAnnotationSidecar(latestState);
+  }
+
+  function closeAnnotationSidecar() {
+    cancelSidecarClose();
+    sidecarOpen = false;
+    sidecarLocked = false;
+    if (sidecar) {
+      sidecar.classList.add('pinfix-hidden');
+      sidecar.innerHTML = '';
+    }
+  }
+
+  function toggleAnnotationSidecar(locked) {
+    if (sidecarOpen && sidecarLocked) {
+      closeAnnotationSidecar();
+      return;
+    }
+
+    openAnnotationSidecar(locked);
+  }
+
   function setRootSize() {
     const size = getDocumentSize();
     root.style.width = `${size.width}px`;
@@ -269,14 +469,17 @@ function createUI(options) {
 
   function render(state) {
     mount();
+    latestState = state;
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
     renderChrome(state);
     renderPopover(state);
+    renderAnnotationSidecar(state);
     renderAnnotations(state);
     renderGlobalNotes(state);
     renderToast(state);
     renderCountdown(state);
+    positionTooltip();
     focusEditingNote(state);
   }
 
@@ -312,8 +515,9 @@ function createUI(options) {
     ];
 
     launcher.classList.toggle('pinfix-hidden', state.open);
-    launcher.title = t('launcherOpen');
+    launcher.removeAttribute('title');
     launcher.setAttribute('aria-label', t('launcherOpen'));
+    launcher.dataset.tooltip = t('launcherOpen');
     launcher.textContent = '';
 
     toolbar.classList.toggle('pinfix-hidden', !state.open);
@@ -321,7 +525,8 @@ function createUI(options) {
       <button
         class="pinfix-toolbar-close"
         type="button"
-        title="${escapeHtml(t('launcherClose'))}"
+        aria-label="${escapeHtml(t('launcherClose'))}"
+        data-tooltip="${escapeHtml(t('launcherClose'))}"
         data-action="run"
         data-name="close-pinfix"
       >${iconSvg('close')}</button>
@@ -332,7 +537,8 @@ function createUI(options) {
           <button
             class="pinfix-tool-button ${active ? 'is-active' : ''}"
             type="button"
-            title="${escapeHtml(button.label)}"
+            aria-label="${escapeHtml(button.label)}"
+            data-tooltip="${escapeHtml(button.label)}"
             data-action="tool"
             data-tool="${button.tool}"
           >${button.icon}</button>
@@ -346,17 +552,63 @@ function createUI(options) {
     if (!state.open || !state.activePopover) {
       popover.classList.add('pinfix-hidden');
       popover.innerHTML = '';
+      delete popover.dataset.panel;
+      closeAnnotationSidecar();
       return;
     }
 
     const toolbarBox = root.querySelector('.pinfix-toolbar').getBoundingClientRect();
     popover.classList.remove('pinfix-hidden');
-    const nextLeft = clamp(toolbarBox.right + 12, 12, window.innerWidth - 260);
-    popover.style.left = `${nextLeft}px`;
+    popover.dataset.panel = state.activePopover;
     popover.innerHTML = buildPopoverContent(state);
+    const maxLeft = Math.max(12, window.innerWidth - popover.offsetWidth - 12);
+    const nextLeft = clamp(toolbarBox.right + 12, 12, maxLeft);
+    popover.style.left = `${nextLeft}px`;
     const maxTop = Math.max(12, window.innerHeight - popover.offsetHeight - 12);
     const nextTop = clamp(toolbarBox.top, 12, maxTop);
     popover.style.top = `${nextTop}px`;
+  }
+
+  function renderAnnotationSidecar(state) {
+    if (!sidecar || !state || !state.open || state.activePopover !== 'more' || !sidecarOpen) {
+      if (!state || state.activePopover !== 'more') {
+        sidecarOpen = false;
+        sidecarLocked = false;
+      }
+      if (sidecar) {
+        sidecar.classList.add('pinfix-hidden');
+        sidecar.innerHTML = '';
+      }
+      return;
+    }
+
+    sidecar.innerHTML = buildAnnotationSidecarContent(state);
+    sidecar.classList.remove('pinfix-hidden');
+
+    const popoverBox = popover.getBoundingClientRect();
+    const trigger = root.querySelector('.pinfix-annotation-sidecar-trigger');
+    const triggerBox = trigger ? trigger.getBoundingClientRect() : popoverBox;
+    const sidecarBox = sidecar.getBoundingClientRect();
+    const maxLeft = Math.max(viewportMargin, window.innerWidth - sidecarBox.width - viewportMargin);
+    let left = popoverBox.right + 10;
+    let top = triggerBox.top;
+
+    if (left + sidecarBox.width > window.innerWidth - viewportMargin) {
+      left = popoverBox.left - sidecarBox.width - 10;
+      sidecar.dataset.placement = 'left';
+    } else {
+      sidecar.dataset.placement = 'right';
+    }
+
+    if (left < viewportMargin) {
+      left = clamp(popoverBox.left, viewportMargin, maxLeft);
+      top = popoverBox.bottom + 10;
+      sidecar.dataset.placement = 'bottom';
+    }
+
+    const maxTop = Math.max(viewportMargin, window.innerHeight - sidecarBox.height - viewportMargin);
+    sidecar.style.left = `${clamp(left, viewportMargin, maxLeft)}px`;
+    sidecar.style.top = `${clamp(top, viewportMargin, maxTop)}px`;
   }
 
   function getSafeViewportBounds() {
@@ -833,13 +1085,24 @@ function createUI(options) {
   function renderToast(state) {
     if (!state.toast) {
       toast.classList.add('pinfix-hidden');
-      toast.textContent = '';
+      toast.innerHTML = '';
       return;
     }
 
+    const toastPayload = typeof state.toast === 'string'
+      ? { message: state.toast }
+      : state.toast;
     toast.classList.remove('pinfix-hidden');
     toast.classList.toggle('is-dark', state.pageTone === 'dark');
-    toast.textContent = state.toast;
+    toast.classList.toggle('is-success', toastPayload.tone === 'success');
+    toast.innerHTML = `
+      <span>${escapeHtml(toastPayload.message || '')}</span>
+      ${toastPayload.actionName && toastPayload.actionLabel ? `
+        <button type="button" data-action="run" data-name="${escapeHtml(toastPayload.actionName)}">
+          ${escapeHtml(toastPayload.actionLabel)}
+        </button>
+      ` : ''}
+    `;
   }
 
   function renderCountdown(state) {
@@ -872,6 +1135,38 @@ function createUI(options) {
           })
           .join('')}
       </div>
+    `;
+  }
+
+  function buildAnnotationSidecarContent(state) {
+    const items = state.annotations.length
+      ? state.annotations.map((annotation) => {
+        const noteText = String(annotation.note || '').trim();
+        const hasNote = Boolean(noteText);
+        const summary = noteText || t('noteMissingShort');
+        return `
+          <button
+            class="pinfix-sidecar-item ${hasNote ? '' : 'is-missing'}"
+            type="button"
+            data-action="focus-annotation"
+            data-id="${annotation.id}"
+          >
+            <span class="pinfix-sidecar-number">${annotation.number}</span>
+            <span class="pinfix-sidecar-body">
+              <strong>${escapeHtml(summary)}</strong>
+              <small>${escapeHtml(t(hasNote ? 'noteReadyShort' : 'noteMissingStatus'))}</small>
+            </span>
+          </button>
+        `;
+      }).join('')
+      : `<div class="pinfix-sidecar-empty">${escapeHtml(t('emptyState'))}</div>`;
+
+    return `
+      <div class="pinfix-sidecar-title">
+        <span>${escapeHtml(t('annotationList'))}</span>
+        <span>${state.annotations.length}</span>
+      </div>
+      <div class="pinfix-sidecar-list">${items}</div>
     `;
   }
 
@@ -941,18 +1236,9 @@ function createUI(options) {
 
     const noteToggleKey = state.settings.notesVisible ? 'notesOff' : 'notesOn';
     const reviewState = state.reviewSummary || { missingCount: 0, maskCount: 0, ready: true };
-    const annotationItems = state.annotations.length
-      ? state.annotations
-          .map((annotation) => {
-            const label = summariseNote(annotation.note) || t('noteMissingShort');
-            return `
-              <button type="button" data-action="focus-annotation" data-id="${annotation.id}">
-                ${annotation.number}. ${escapeHtml(label)}
-              </button>
-            `;
-          })
-          .join('')
-      : `<button type="button" disabled>${escapeHtml(t('emptyState'))}</button>`;
+    const annotationListLabel = fillTemplate(t('viewAnnotationList'), {
+      count: state.annotations.length
+    });
 
     const reviewBlock = reviewState.ready
       ? `<div class="pinfix-meta-copy pinfix-status-good">${escapeHtml(t('reviewReady'))}</div>`
@@ -971,8 +1257,13 @@ function createUI(options) {
       <div class="pinfix-list">
         <button type="button" data-action="run" data-name="undo">${escapeHtml(t('undo'))}</button>
         <button type="button" data-action="run" data-name="toggle-notes">${escapeHtml(t(noteToggleKey))}</button>
-        <button type="button" data-action="run" data-name="clear-page">${escapeHtml(t('clearPage'))}</button>
       </div>
+      <div class="pinfix-divider"></div>
+      <div class="pinfix-section-title">${escapeHtml(t('dangerZone'))}</div>
+      <div class="pinfix-list pinfix-list-stack">
+        <button class="pinfix-danger-action" type="button" data-action="run" data-name="clear-page">${escapeHtml(t('clearAllPageData'))}</button>
+      </div>
+      <div class="pinfix-meta-copy pinfix-danger-hint">${escapeHtml(t('clearAllHint'))}</div>
       <div class="pinfix-divider"></div>
       <div class="pinfix-section-title">${escapeHtml(t('privacyMode'))}</div>
       <div class="pinfix-list">
@@ -1012,7 +1303,16 @@ function createUI(options) {
       </div>
       <div class="pinfix-divider"></div>
       <div class="pinfix-section-title">${escapeHtml(t('annotationList'))}</div>
-      <div class="pinfix-list">${annotationItems}</div>
+      <button
+        class="pinfix-annotation-sidecar-trigger"
+        type="button"
+        data-action="toggle-annotation-sidecar"
+        aria-expanded="${sidecarOpen && sidecarLocked ? 'true' : 'false'}"
+      >
+        <span>${escapeHtml(annotationListLabel)}</span>
+        <span>${escapeHtml(t(sidecarOpen ? 'collapse' : 'expand'))}</span>
+      </button>
+      <div class="pinfix-meta-copy">${escapeHtml(t('annotationListHint'))}</div>
     `;
   }
 

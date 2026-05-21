@@ -81,12 +81,17 @@ function createExporters(options) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  async function tryCopyCanvas(canvas) {
+  function canvasToPngBlob(canvas) {
+    return new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/png');
+    });
+  }
+
+  async function tryCopyBlob(blob) {
     if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
       return false;
     }
 
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) {
       return false;
     }
@@ -124,24 +129,27 @@ function createExporters(options) {
         windowHeight: window.innerHeight
       });
 
+      const blob = await canvasToPngBlob(canvas);
+      if (!blob) {
+        throw new Error('Failed to create PNG blob');
+      }
+
       let copied = false;
       if (context.preferClipboard) {
         try {
-          copied = await tryCopyCanvas(canvas);
+          copied = await tryCopyBlob(blob);
         } catch (error) {
           copied = false;
         }
       }
 
+      let downloaded = false;
       if (!copied) {
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-        if (!blob) {
-          throw new Error('Failed to create PNG blob');
-        }
         downloadBlob(blob, `pinfix-${Date.now()}.png`);
+        downloaded = true;
       }
 
-      return { copied, canvas };
+      return { copied, downloaded, canvas, blob };
     } finally {
       await options.afterCapture();
     }
@@ -150,6 +158,7 @@ function createExporters(options) {
   return {
     buildMarkdown,
     copyNotes,
+    downloadBlob,
     exportViewportImage
   };
 }
