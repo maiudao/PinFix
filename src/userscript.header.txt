@@ -1,0 +1,11 @@
+// ==UserScript==
+// @name         PinFix
+// @namespace    https://pinfix.local
+// @version      1.0.0
+// @description  Annotate real web pages with numbered notes for Codex or developers.
+// @author       PinFix
+// @match        *://*/*
+// @grant        none
+// @run-at       document-idle
+// @license      MIT
+// ==/UserScript==
