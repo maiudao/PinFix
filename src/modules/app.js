@@ -572,6 +572,9 @@ function createPinFixApp() {
 
   function toggleOpen(forceValue) {
     const nextOpen = typeof forceValue === 'boolean' ? forceValue : !state.open;
+    if (!nextOpen) {
+      savePageData();
+    }
     state.open = nextOpen;
     state.activePopover = null;
     state.tool = state.settings.lastTool || 'select';
@@ -582,8 +585,17 @@ function createPinFixApp() {
       selector.disable();
       state.selectionMode = 'annotate';
       if (!nextOpen) {
+        if (countdownTimer) {
+          window.clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
         state.activeAnnotationId = '';
         state.editingAnnotationId = '';
+        state.globalNoteOpen = false;
+        state.captureMode = false;
+        state.captureHidden = false;
+        state.countdownRemaining = 0;
+        state.toast = '';
         clearCandidate();
       }
     }

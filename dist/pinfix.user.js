@@ -2740,6 +2740,10 @@ function createUI(options) {
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
     renderChrome(state);
+    if (!state.open) {
+      renderClosedState();
+      return;
+    }
     renderPopover(state);
     renderAnnotationSidecar(state);
     renderAnnotations(state);
@@ -2748,6 +2752,41 @@ function createUI(options) {
     renderCountdown(state);
     positionTooltip();
     focusEditingNote(state);
+  }
+
+  function renderClosedState() {
+    closeAnnotationSidecar();
+    hideTooltip();
+    if (overlayLayer) {
+      overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
+    }
+    if (candidate) {
+      candidate.classList.add('pinfix-hidden');
+      candidate.innerHTML = '';
+    }
+    if (noteLayer) {
+      noteLayer.innerHTML = '';
+    }
+    if (popover) {
+      popover.classList.add('pinfix-hidden');
+      popover.innerHTML = '';
+      delete popover.dataset.panel;
+    }
+    if (globalStrip) {
+      globalStrip.classList.add('pinfix-hidden');
+    }
+    if (globalPanel) {
+      globalPanel.classList.add('pinfix-hidden');
+      globalPanel.innerHTML = '';
+    }
+    if (toast) {
+      toast.classList.add('pinfix-hidden');
+      toast.innerHTML = '';
+    }
+    if (countdown) {
+      countdown.classList.add('pinfix-hidden');
+      countdown.textContent = '';
+    }
   }
 
   function focusEditingNote(state) {
@@ -4165,6 +4204,9 @@ function createPinFixApp() {
 
   function toggleOpen(forceValue) {
     const nextOpen = typeof forceValue === 'boolean' ? forceValue : !state.open;
+    if (!nextOpen) {
+      savePageData();
+    }
     state.open = nextOpen;
     state.activePopover = null;
     state.tool = state.settings.lastTool || 'select';
@@ -4175,8 +4217,17 @@ function createPinFixApp() {
       selector.disable();
       state.selectionMode = 'annotate';
       if (!nextOpen) {
+        if (countdownTimer) {
+          window.clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
         state.activeAnnotationId = '';
         state.editingAnnotationId = '';
+        state.globalNoteOpen = false;
+        state.captureMode = false;
+        state.captureHidden = false;
+        state.countdownRemaining = 0;
+        state.toast = '';
         clearCandidate();
       }
     }

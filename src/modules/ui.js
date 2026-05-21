@@ -472,6 +472,10 @@ function createUI(options) {
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
     renderChrome(state);
+    if (!state.open) {
+      renderClosedState();
+      return;
+    }
     renderPopover(state);
     renderAnnotationSidecar(state);
     renderAnnotations(state);
@@ -480,6 +484,41 @@ function createUI(options) {
     renderCountdown(state);
     positionTooltip();
     focusEditingNote(state);
+  }
+
+  function renderClosedState() {
+    closeAnnotationSidecar();
+    hideTooltip();
+    if (overlayLayer) {
+      overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
+    }
+    if (candidate) {
+      candidate.classList.add('pinfix-hidden');
+      candidate.innerHTML = '';
+    }
+    if (noteLayer) {
+      noteLayer.innerHTML = '';
+    }
+    if (popover) {
+      popover.classList.add('pinfix-hidden');
+      popover.innerHTML = '';
+      delete popover.dataset.panel;
+    }
+    if (globalStrip) {
+      globalStrip.classList.add('pinfix-hidden');
+    }
+    if (globalPanel) {
+      globalPanel.classList.add('pinfix-hidden');
+      globalPanel.innerHTML = '';
+    }
+    if (toast) {
+      toast.classList.add('pinfix-hidden');
+      toast.innerHTML = '';
+    }
+    if (countdown) {
+      countdown.classList.add('pinfix-hidden');
+      countdown.textContent = '';
+    }
   }
 
   function focusEditingNote(state) {
