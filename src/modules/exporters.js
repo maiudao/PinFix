@@ -111,15 +111,32 @@ function createExporters(options) {
     await sleep(60);
 
     try {
+      const sourceRect = context && context.rect ? context.rect : null;
+      const captureRect = sourceRect
+        ? {
+          x: Math.max(0, Math.min(window.innerWidth, Number(sourceRect.x) || 0)),
+          y: Math.max(0, Math.min(window.innerHeight, Number(sourceRect.y) || 0)),
+          width: Math.max(1, Math.min(window.innerWidth, Number(sourceRect.width) || 0)),
+          height: Math.max(1, Math.min(window.innerHeight, Number(sourceRect.height) || 0))
+        }
+        : {
+          x: 0,
+          y: 0,
+          width: window.innerWidth,
+          height: window.innerHeight
+        };
+      captureRect.width = Math.max(1, Math.min(captureRect.width, window.innerWidth - captureRect.x));
+      captureRect.height = Math.max(1, Math.min(captureRect.height, window.innerHeight - captureRect.y));
+
       const canvas = await html2canvas(document.documentElement, {
         backgroundColor: null,
         logging: false,
         useCORS: true,
         scale: Math.min(window.devicePixelRatio || 1, 2),
-        width: window.innerWidth,
-        height: window.innerHeight,
-        x: window.scrollX,
-        y: window.scrollY,
+        width: captureRect.width,
+        height: captureRect.height,
+        x: window.scrollX + captureRect.x,
+        y: window.scrollY + captureRect.y,
         scrollX: window.scrollX,
         scrollY: window.scrollY,
         windowWidth: window.innerWidth,

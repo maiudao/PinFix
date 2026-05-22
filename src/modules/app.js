@@ -17,6 +17,7 @@ function createPinFixApp() {
     activePopover: null,
     captureMode: false,
     captureHidden: false,
+    areaCaptureActive: false,
     countdownRemaining: 0,
     candidate: null,
     candidateElement: null,
@@ -54,7 +55,9 @@ function createPinFixApp() {
     onToggleGlobal: (next) => toggleGlobalPanel(next),
     onHideNotes: () => hideAnnotationNotes(),
     onTool: (tool) => handleTool(tool),
-    onQuickScreenshot: () => quickScreenshot(),
+    onStartAreaCapture: () => startAreaCapture(),
+    onCancelAreaCapture: (messageKey) => cancelAreaCapture(messageKey),
+    onCaptureAreaScreenshot: (rect) => captureAreaScreenshot(rect),
     onSetSetting: (key, value) => updateSetting(key, value),
     onRun: (name) => runNamedAction(name),
     onDeleteAnnotation: (id) => deleteAnnotation(id),
@@ -85,9 +88,9 @@ function createPinFixApp() {
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     getSelectionMode: () => state.selectionMode,
-    isSelectionActive: () => state.selectionActive && !state.globalNoteOpen,
+    isSelectionActive: () => state.selectionActive && !state.globalNoteOpen && !state.areaCaptureActive,
     onCandidateChange: ({ element }) => {
-      if (state.globalNoteOpen) {
+      if (state.globalNoteOpen || state.areaCaptureActive) {
         return;
       }
       state.candidateElement = element || null;
@@ -883,6 +886,7 @@ function createPinFixApp() {
     if (!nextOpen) {
       commitGlobalTemplateDraft(false);
       savePageData();
+      cancelAreaCapture();
     }
     state.open = nextOpen;
     state.activePopover = null;
@@ -904,6 +908,7 @@ function createPinFixApp() {
         state.globalNoteOpen = false;
         state.captureMode = false;
         state.captureHidden = false;
+        state.areaCaptureActive = false;
         state.countdownRemaining = 0;
         state.toast = '';
         setSelectionActive(false);
@@ -921,6 +926,18 @@ function createPinFixApp() {
 
     if (tool === 'copy') {
       copyNotes();
+      return;
+    }
+
+    if (tool === 'capture') {
+      selector.disable();
+      setSelectionActive(false);
+      state.tool = 'capture';
+      state.settings.lastTool = 'capture';
+      state.activePopover = state.activePopover === 'capture' ? null : 'capture';
+      state.areaCaptureActive = false;
+      saveGlobalSettings();
+      render();
       return;
     }
 
@@ -1070,12 +1087,74 @@ function createPinFixApp() {
     }
   }
 
-  async function quickScreenshot() {
+  function startAreaCapture() {
+    if (!state.open) {
+      state.open = true;
+    }
+
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+
+    if (state.globalNoteOpen) {
+      commitGlobalTemplateDraft(false);
+    }
+
+    selector.disable();
+    setSelectionActive(false);
+    clearCandidate();
+    state.tool = 'capture';
+    state.activePopover = null;
+    state.globalNoteOpen = false;
+    state.areaCaptureActive = true;
+    render();
+  }
+
+  function cancelAreaCapture(messageKey) {
+    if (!state.areaCaptureActive) {
+      return;
+    }
+
+    state.areaCaptureActive = false;
+    state.tool = 'select';
+    if (state.tool === 'select' && state.open) {
+      setSelectionActive(true);
+      selector.enable();
+      selector.refresh();
+    }
+    render();
+    if (messageKey) {
+      showToast(messageKey);
+    }
+  }
+
+  async function captureAreaScreenshot(rect) {
+    const selectedRect = rect && {
+      x: Math.max(0, Number(rect.x) || 0),
+      y: Math.max(0, Number(rect.y) || 0),
+      width: Math.max(0, Number(rect.width) || 0),
+      height: Math.max(0, Number(rect.height) || 0)
+    };
+
+    if (!selectedRect || selectedRect.width < 8 || selectedRect.height < 8) {
+      cancelAreaCapture('areaCaptureTooSmall');
+      return;
+    }
+
+    state.areaCaptureActive = false;
+    state.tool = 'select';
+    state.activePopover = null;
+    if (state.tool === 'select' && state.open) {
+      setSelectionActive(true);
+      selector.enable();
+      selector.refresh();
+    }
+    render();
+
     try {
-      state.activePopover = null;
-      render();
       const result = await exporters.exportViewportImage({
-        preferClipboard: true
+        preferClipboard: true,
+        rect: selectedRect
       });
       lastScreenshotBlob = result.blob || null;
 
@@ -1199,6 +1278,12 @@ function createPinFixApp() {
   }
 
   function handleWindowKeydown(event) {
+    if (state.areaCaptureActive && event.key === 'Escape') {
+      event.preventDefault();
+      cancelAreaCapture('areaCaptureCanceled');
+      return;
+    }
+
     if (isEditableTarget(event.target)) {
       return;
     }

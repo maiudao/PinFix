@@ -11,13 +11,13 @@ function createUI(options) {
   let tooltip = null;
   let sidecar = null;
   let candidate = null;
-  let toolClickTimer = null;
-  let lastCaptureClickAt = 0;
-  let lastQuickScreenshotAt = 0;
   let tooltipTarget = null;
   let sidecarOpen = false;
   let sidecarLocked = false;
   let sidecarCloseTimer = null;
+  let areaCaptureLayer = null;
+  let areaCaptureDraft = null;
+  let areaCapturePointerId = null;
   let latestState = null;
   let pendingTextSelection = null;
   let pendingGlobalPanelScroll = null;
@@ -106,8 +106,13 @@ function createUI(options) {
     candidate = document.createElement('div');
     candidate.className = 'pinfix-candidate pinfix-hidden';
     overlayLayer.appendChild(candidate);
+    areaCaptureLayer = document.createElement('div');
+    areaCaptureLayer.className = 'pinfix-area-capture-layer pinfix-hidden';
+    areaCaptureLayer.setAttribute('data-html2canvas-ignore', 'true');
+    overlayLayer.appendChild(areaCaptureLayer);
 
     root.addEventListener('click', handleClick);
+    root.addEventListener('contextmenu', handleContextMenu);
     root.addEventListener('dblclick', handleDoubleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('focusin', handleFocusIn);
@@ -124,7 +129,7 @@ function createUI(options) {
       return;
     }
 
-    window.clearTimeout(toolClickTimer);
+    clearAreaCaptureDraft();
     cancelSidecarClose();
 
     document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
@@ -206,22 +211,10 @@ function createUI(options) {
     }
     if (action === 'tool') {
       if (actionTarget.dataset.tool === 'capture') {
-        const now = Date.now();
-        const isFastSecondClick = now - lastCaptureClickAt < 420;
-        lastCaptureClickAt = now;
-        window.clearTimeout(toolClickTimer);
-        toolClickTimer = null;
-        if (event.detail >= 2 || isFastSecondClick) {
-          runQuickScreenshotShortcut();
-          return;
-        }
-        toolClickTimer = window.setTimeout(() => {
-          toolClickTimer = null;
-          options.onTool(actionTarget.dataset.tool);
-        }, 300);
+        hideTooltip();
+        closeAnnotationSidecar();
+        options.onStartAreaCapture();
       } else {
-        window.clearTimeout(toolClickTimer);
-        toolClickTimer = null;
         options.onTool(actionTarget.dataset.tool);
       }
     }
@@ -266,16 +259,26 @@ function createUI(options) {
     }
   }
 
+  function handleContextMenu(event) {
+    const actionTarget = event.target.closest('[data-action="tool"][data-tool="capture"]');
+    if (!actionTarget) {
+      if (latestState && latestState.areaCaptureActive) {
+        event.preventDefault();
+        options.onCancelAreaCapture('areaCaptureCanceled');
+      }
+      return;
+    }
+
+    event.preventDefault();
+    hideTooltip();
+    closeAnnotationSidecar();
+    options.onTool('capture');
+  }
+
   function handleDoubleClick(event) {
     const actionTarget = event.target.closest('[data-action="tool"][data-tool="capture"]');
     if (actionTarget) {
       event.preventDefault();
-      window.clearTimeout(toolClickTimer);
-      toolClickTimer = null;
-      if (Date.now() - lastQuickScreenshotAt < 500) {
-        return;
-      }
-      runQuickScreenshotShortcut();
       return;
     }
 
@@ -284,13 +287,6 @@ function createUI(options) {
     }
 
     options.onHideNotes();
-  }
-
-  function runQuickScreenshotShortcut() {
-    lastQuickScreenshotAt = Date.now();
-    hideTooltip();
-    closeAnnotationSidecar();
-    options.onQuickScreenshot();
   }
 
   function isGlobalTemplateField(target) {
@@ -491,6 +487,150 @@ function createUI(options) {
     tooltip.textContent = '';
   }
 
+  function clearAreaCaptureDraft() {
+    areaCaptureDraft = null;
+    areaCapturePointerId = null;
+  }
+
+  function getAreaCapturePoint(event) {
+    return {
+      x: clamp(event.clientX, 0, window.innerWidth),
+      y: clamp(event.clientY, 0, window.innerHeight)
+    };
+  }
+
+  function getAreaCaptureRect() {
+    if (!areaCaptureDraft) {
+      return null;
+    }
+
+    const left = Math.min(areaCaptureDraft.startX, areaCaptureDraft.currentX);
+    const top = Math.min(areaCaptureDraft.startY, areaCaptureDraft.currentY);
+    const right = Math.max(areaCaptureDraft.startX, areaCaptureDraft.currentX);
+    const bottom = Math.max(areaCaptureDraft.startY, areaCaptureDraft.currentY);
+    return {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top
+    };
+  }
+
+  function updateAreaCaptureSelection() {
+    if (!areaCaptureLayer) {
+      return;
+    }
+
+    const selection = areaCaptureLayer.querySelector('.pinfix-area-capture-selection');
+    const meta = areaCaptureLayer.querySelector('.pinfix-area-capture-meta');
+    const rect = getAreaCaptureRect();
+    if (!selection || !rect || rect.width < 1 || rect.height < 1) {
+      if (selection) {
+        selection.classList.add('pinfix-hidden');
+      }
+      if (meta) {
+        meta.textContent = t('areaCaptureHint');
+      }
+      return;
+    }
+
+    selection.classList.remove('pinfix-hidden');
+    selection.style.left = `${rect.x}px`;
+    selection.style.top = `${rect.y}px`;
+    selection.style.width = `${rect.width}px`;
+    selection.style.height = `${rect.height}px`;
+    if (meta) {
+      meta.textContent = `${Math.round(rect.width)} x ${Math.round(rect.height)}`;
+    }
+  }
+
+  function handleAreaCapturePointerDown(event) {
+    if (!latestState || !latestState.areaCaptureActive || event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const point = getAreaCapturePoint(event);
+    areaCapturePointerId = event.pointerId;
+    areaCaptureDraft = {
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y
+    };
+    areaCaptureLayer.setPointerCapture(event.pointerId);
+    updateAreaCaptureSelection();
+  }
+
+  function handleAreaCapturePointerMove(event) {
+    if (!areaCaptureDraft || event.pointerId !== areaCapturePointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    const point = getAreaCapturePoint(event);
+    areaCaptureDraft.currentX = point.x;
+    areaCaptureDraft.currentY = point.y;
+    updateAreaCaptureSelection();
+  }
+
+  function handleAreaCapturePointerUp(event) {
+    if (!areaCaptureDraft || event.pointerId !== areaCapturePointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    if (areaCaptureLayer.hasPointerCapture(event.pointerId)) {
+      areaCaptureLayer.releasePointerCapture(event.pointerId);
+    }
+    const rect = getAreaCaptureRect();
+    clearAreaCaptureDraft();
+    updateAreaCaptureSelection();
+    options.onCaptureAreaScreenshot(rect);
+  }
+
+  function handleAreaCapturePointerCancel(event) {
+    if (areaCapturePointerId !== null && areaCaptureLayer && areaCaptureLayer.hasPointerCapture(areaCapturePointerId)) {
+      areaCaptureLayer.releasePointerCapture(areaCapturePointerId);
+    }
+    clearAreaCaptureDraft();
+    updateAreaCaptureSelection();
+    options.onCancelAreaCapture(event.type === 'contextmenu' ? 'areaCaptureCanceled' : '');
+  }
+
+  function renderAreaCapture(state) {
+    if (!areaCaptureLayer) {
+      return;
+    }
+
+    if (!state.areaCaptureActive) {
+      areaCaptureLayer.classList.add('pinfix-hidden');
+      areaCaptureLayer.innerHTML = '';
+      clearAreaCaptureDraft();
+      return;
+    }
+
+    areaCaptureLayer.classList.remove('pinfix-hidden');
+    if (!areaCaptureLayer.querySelector('.pinfix-area-capture-selection')) {
+      areaCaptureLayer.innerHTML = `
+        <div class="pinfix-area-capture-hint">
+          <strong>${escapeHtml(t('areaCaptureTitle'))}</strong>
+          <span class="pinfix-area-capture-meta">${escapeHtml(t('areaCaptureHint'))}</span>
+        </div>
+        <div class="pinfix-area-capture-selection pinfix-hidden"></div>
+      `;
+      areaCaptureLayer.onpointerdown = handleAreaCapturePointerDown;
+      areaCaptureLayer.onpointermove = handleAreaCapturePointerMove;
+      areaCaptureLayer.onpointerup = handleAreaCapturePointerUp;
+      areaCaptureLayer.onpointercancel = handleAreaCapturePointerCancel;
+      areaCaptureLayer.oncontextmenu = (event) => {
+        event.preventDefault();
+        handleAreaCapturePointerCancel(event);
+      };
+    }
+    updateAreaCaptureSelection();
+  }
+
   function cancelSidecarClose() {
     if (sidecarCloseTimer) {
       window.clearTimeout(sidecarCloseTimer);
@@ -552,6 +692,7 @@ function createUI(options) {
     latestState = state;
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
+    root.classList.toggle('pinfix-area-capture-active', Boolean(state.areaCaptureActive));
     renderChrome(state);
     if (!state.open) {
       renderClosedState();
@@ -560,6 +701,7 @@ function createUI(options) {
     renderPopover(state);
     renderAnnotationSidecar(state);
     renderAnnotations(state);
+    renderAreaCapture(state);
     renderGlobalNotes(state);
     renderToast(state);
     renderCountdown(state);
@@ -579,6 +721,8 @@ function createUI(options) {
       candidate.classList.add('pinfix-hidden');
       candidate.innerHTML = '';
     }
+    clearAreaCaptureDraft();
+    renderAreaCapture({ areaCaptureActive: false });
     if (noteLayer) {
       noteLayer.innerHTML = '';
     }

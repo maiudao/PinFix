@@ -125,7 +125,7 @@ function getPinFixStyles() {
   place-items: center;
   cursor: pointer;
   font-size: 18px;
-  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
 .pinfix-toolbar-close {
@@ -177,16 +177,11 @@ function getPinFixStyles() {
   transform: scale(1);
 }
 
-.pinfix-launcher:hover {
-  transform: translateY(-1px);
-}
-
 .pinfix-launcher:hover::before {
   background: rgba(222, 247, 244, 0.96);
 }
 
 .pinfix-tool-button:hover {
-  transform: translateY(-1px);
   background: rgba(222, 247, 244, 0.96);
 }
 
@@ -225,6 +220,10 @@ function getPinFixStyles() {
 
 .pinfix-popover[data-panel="more"] {
   width: 320px;
+}
+
+.pinfix-popover[data-panel="style"] {
+  width: min(430px, calc(100vw - 24px));
 }
 
 .pinfix-sidecar {
@@ -650,6 +649,60 @@ function getPinFixStyles() {
   white-space: nowrap;
 }
 
+.pinfix-area-capture-active .pinfix-chrome {
+  display: none !important;
+}
+
+.pinfix-area-capture-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: auto;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.34), rgba(15, 23, 42, 0.34)),
+    radial-gradient(circle at 50% 45%, rgba(45, 212, 191, 0.18), rgba(15, 23, 42, 0) 42%);
+}
+
+.pinfix-area-capture-hint {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 4px;
+  min-width: min(420px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(153, 246, 228, 0.46);
+  background: rgba(15, 23, 42, 0.86);
+  color: #f8fafc;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(14px);
+  text-align: center;
+}
+
+.pinfix-area-capture-hint strong {
+  font-size: 14px;
+}
+
+.pinfix-area-capture-hint span {
+  color: rgba(226, 232, 240, 0.86);
+  font-size: 12px;
+}
+
+.pinfix-area-capture-selection {
+  position: fixed;
+  border: 2px solid #5eead4;
+  border-radius: 10px;
+  background: rgba(240, 253, 250, 0.16);
+  box-shadow:
+    0 0 0 9999px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(15, 118, 110, 0.5) inset;
+}
+
 .pinfix-note-card {
   position: absolute;
   z-index: 25;
@@ -892,8 +945,9 @@ function getPinFixStyles() {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 2px;
+  padding: 6px 12px 12px 6px;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .pinfix-global-editor-top {
@@ -942,6 +996,14 @@ function getPinFixStyles() {
   padding: 9px 12px;
   background: rgba(248, 250, 252, 0.82);
   font-size: 13px;
+}
+
+#pinfix-root .pinfix-global-panel .pinfix-global-template-title:focus-visible,
+#pinfix-root .pinfix-global-panel .pinfix-global-template-content:focus-visible,
+#pinfix-root .pinfix-global-panel .pinfix-global-note-input:focus-visible {
+  outline: none;
+  border-color: rgba(45, 212, 191, 0.58);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.22);
 }
 
 .pinfix-global-template-options {
@@ -1020,6 +1082,10 @@ function getPinFixStyles() {
 
 .pinfix-global-template-content {
   min-height: 300px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(248, 250, 252, 0.82);
 }
 
 .pinfix-global-template-danger {
@@ -1054,6 +1120,7 @@ function getPinFixStyles() {
 .pinfix-global-panel.is-dark .pinfix-global-template-add,
 .pinfix-global-panel.is-dark .pinfix-global-template-option,
 .pinfix-global-panel.is-dark .pinfix-global-template-title,
+.pinfix-global-panel.is-dark .pinfix-global-template-content,
 .pinfix-global-panel.is-dark .pinfix-global-template-danger {
   background: rgba(30, 41, 59, 0.78);
   border-color: rgba(148, 163, 184, 0.24);
@@ -1124,6 +1191,7 @@ function getPinFixStyles() {
 .pinfix-hidden-for-capture .pinfix-global-strip,
 .pinfix-hidden-for-capture .pinfix-global-panel,
 .pinfix-hidden-for-capture .pinfix-candidate,
+.pinfix-hidden-for-capture .pinfix-area-capture-layer,
 .pinfix-hidden-for-capture .pinfix-toast,
 .pinfix-hidden-for-capture .pinfix-tooltip,
 .pinfix-hidden-for-capture .pinfix-inline-tools {
