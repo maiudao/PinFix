@@ -80,6 +80,10 @@ function createSelectorManager(options) {
     return typeof options.getSelectionMode === 'function' ? options.getSelectionMode() : 'annotate';
   }
 
+  function isSelectionActive() {
+    return typeof options.isSelectionActive === 'function' ? options.isSelectionActive() : true;
+  }
+
   function getElementsAtPoint(point) {
     if (document.elementsFromPoint) {
       return document.elementsFromPoint(point.x, point.y).filter((item) => item instanceof HTMLElement);
@@ -178,7 +182,7 @@ function createSelectorManager(options) {
   }
 
   function refreshFromPoint(point) {
-    if (!enabled || !point) {
+    if (!enabled || !isSelectionActive() || !point) {
       return;
     }
 
@@ -203,6 +207,10 @@ function createSelectorManager(options) {
   }
 
   function handlePointerMove(event) {
+    if (!isSelectionActive()) {
+      return;
+    }
+
     lastPoint = { x: event.clientX, y: event.clientY };
     refreshFromPoint(lastPoint);
   }
@@ -214,7 +222,7 @@ function createSelectorManager(options) {
   }
 
   function handleClick(event) {
-    if (!enabled) {
+    if (!enabled || !isSelectionActive() || getSelectionMode() !== 'mask') {
       return;
     }
 
@@ -231,14 +239,12 @@ function createSelectorManager(options) {
       return;
     }
 
-    if (getSelectionMode() === 'mask') {
-      options.onSelect(element);
-      manualIndexLocked = false;
-    }
+    options.onSelect(element);
+    manualIndexLocked = false;
   }
 
-  function handleDoubleClick(event) {
-    if (!enabled || getSelectionMode() === 'mask') {
+  function handleContextMenu(event) {
+    if (!enabled || !isSelectionActive() || getSelectionMode() === 'mask') {
       return;
     }
 
@@ -270,7 +276,7 @@ function createSelectorManager(options) {
   }
 
   function handleKeydown(event) {
-    if (!enabled || isEditableTarget(event.target)) {
+    if (!enabled || !isSelectionActive() || isEditableTarget(event.target)) {
       return;
     }
 
@@ -294,7 +300,7 @@ function createSelectorManager(options) {
       enabled = true;
       window.addEventListener('pointermove', handlePointerMove, true);
       window.addEventListener('click', handleClick, true);
-      window.addEventListener('dblclick', handleDoubleClick, true);
+      window.addEventListener('contextmenu', handleContextMenu, true);
       window.addEventListener('keydown', handleKeydown, true);
 
       if (lastPoint) {
@@ -312,7 +318,7 @@ function createSelectorManager(options) {
       manualIndexLocked = false;
       window.removeEventListener('pointermove', handlePointerMove, true);
       window.removeEventListener('click', handleClick, true);
-      window.removeEventListener('dblclick', handleDoubleClick, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
       window.removeEventListener('keydown', handleKeydown, true);
       notifyCandidate();
     },

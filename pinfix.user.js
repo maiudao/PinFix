@@ -213,6 +213,20 @@ function createI18n() {
       reviewMasks: '当前遮挡数量：{count}',
       globalNotes: '补充说明',
       globalNotesHint: '写业务逻辑、整体方向或无法绑定到单个编号的说明',
+      globalNoteTab: '正文',
+      templateAdd: '新增模板',
+      templateUntitled: '未命名模板',
+      templateTitleLabel: '模板标题',
+      templateTitlePlaceholder: '输入模板标题',
+      templateContentLabel: '模板内容',
+      templateContentPlaceholder: '输入模板详细内容',
+      templateDelete: '删除模板',
+      templateSelectionTitle: '勾选模板',
+      templateEmptyHint: '还没有模板，点击右上角的 + 新建一个。',
+      templatePreviewEmpty: '这个模板还没有填写正文内容。',
+      templateDeleteConfirm: '确认删除这个模板吗？删除后当前页面勾选也会立即失效。',
+      globalNoteMergeHint: '这里写页面级补充说明，复制时会和下方勾选模板一起带出。',
+      templateAutoSaveHint: '标题和内容失焦后自动保存，复制时只会带出模板正文。',
       notePlaceholder: '写这里要怎么改，刷新后会自动恢复',
       noteMissingShort: '未填写说明',
       changeRequest: '修改要求',
@@ -342,6 +356,20 @@ function createI18n() {
       reviewMasks: 'Privacy masks on page: {count}',
       globalNotes: 'More notes',
       globalNotesHint: 'Use this for business context, whole-page direction, or notes not tied to one marker.',
+      globalNoteTab: 'Notes',
+      templateAdd: 'Add template',
+      templateUntitled: 'Untitled template',
+      templateTitleLabel: 'Template title',
+      templateTitlePlaceholder: 'Enter a template title',
+      templateContentLabel: 'Template content',
+      templateContentPlaceholder: 'Enter the template content',
+      templateDelete: 'Delete template',
+      templateSelectionTitle: 'Choose templates',
+      templateEmptyHint: 'No templates yet. Click + to create one.',
+      templatePreviewEmpty: 'This template does not have body content yet.',
+      templateDeleteConfirm: 'Delete this template? It will also stop being selected on the current page.',
+      globalNoteMergeHint: 'Write page-level context here. Copy will append the selected templates below.',
+      templateAutoSaveHint: 'Title and content save on blur. Only the template body is copied later.',
       notePlaceholder: 'Describe what should change here. PinFix saves it automatically.',
       noteMissingShort: 'Missing note',
       changeRequest: 'Change request',
@@ -416,7 +444,7 @@ function createI18n() {
       actionShrinkMask: 'Shrink mask',
       actionExpandMask: 'Expand mask',
       actionDeleteMask: 'Delete mask',
-      emptyState: 'No annotations yet. Click Select and pick a page area.',
+      emptyState: 'No annotations yet. Click Select, hover an area, then right-click to annotate.',
       pageTitle: 'Page to update',
       pageUrl: 'Page URL',
       viewportMode: 'Capture mode: current viewport',
@@ -453,6 +481,7 @@ function createI18n() {
 
 function createStorage() {
   const globalKey = 'pinfix:global';
+  const templateKey = 'pinfix:templates';
   const pageKeyPrefix = 'pinfix:page';
 
   // Use a stable URL so dashboard pages with temporary query params
@@ -496,6 +525,21 @@ function createStorage() {
         settings
       });
     },
+    loadTemplates() {
+      const payload = loadJson(templateKey, null);
+      if (!payload || payload.version !== PINFIX_STORAGE_VERSION) {
+        return [];
+      }
+
+      return Array.isArray(payload.templates) ? payload.templates : [];
+    },
+    saveTemplates(templates) {
+      saveJson(templateKey, {
+        version: PINFIX_STORAGE_VERSION,
+        savedAt: Date.now(),
+        templates: Array.isArray(templates) ? templates : []
+      });
+    },
     loadPageData(urlValue) {
       const key = `${pageKeyPrefix}:${normaliseUrl(urlValue)}`;
       const payload = loadJson(key, null);
@@ -504,6 +548,7 @@ function createStorage() {
           annotations: [],
           masks: [],
           globalNote: '',
+          selectedTemplateIds: [],
           pageSettings: {}
         };
       }
@@ -512,6 +557,7 @@ function createStorage() {
         annotations: Array.isArray(payload.annotations) ? payload.annotations : [],
         masks: Array.isArray(payload.masks) ? payload.masks : [],
         globalNote: typeof payload.globalNote === 'string' ? payload.globalNote : '',
+        selectedTemplateIds: Array.isArray(payload.selectedTemplateIds) ? payload.selectedTemplateIds : [],
         pageSettings: payload.pageSettings || {}
       };
     },
@@ -523,6 +569,7 @@ function createStorage() {
         annotations: payload.annotations || [],
         masks: payload.masks || [],
         globalNote: payload.globalNote || '',
+        selectedTemplateIds: Array.isArray(payload.selectedTemplateIds) ? payload.selectedTemplateIds : [],
         pageSettings: payload.pageSettings || {}
       });
     },
@@ -613,6 +660,10 @@ function createSelectorManager(options) {
 
   function getSelectionMode() {
     return typeof options.getSelectionMode === 'function' ? options.getSelectionMode() : 'annotate';
+  }
+
+  function isSelectionActive() {
+    return typeof options.isSelectionActive === 'function' ? options.isSelectionActive() : true;
   }
 
   function getElementsAtPoint(point) {
@@ -713,7 +764,7 @@ function createSelectorManager(options) {
   }
 
   function refreshFromPoint(point) {
-    if (!enabled || !point) {
+    if (!enabled || !isSelectionActive() || !point) {
       return;
     }
 
@@ -738,6 +789,10 @@ function createSelectorManager(options) {
   }
 
   function handlePointerMove(event) {
+    if (!isSelectionActive()) {
+      return;
+    }
+
     lastPoint = { x: event.clientX, y: event.clientY };
     refreshFromPoint(lastPoint);
   }
@@ -749,7 +804,7 @@ function createSelectorManager(options) {
   }
 
   function handleClick(event) {
-    if (!enabled) {
+    if (!enabled || !isSelectionActive() || getSelectionMode() !== 'mask') {
       return;
     }
 
@@ -766,14 +821,12 @@ function createSelectorManager(options) {
       return;
     }
 
-    if (getSelectionMode() === 'mask') {
-      options.onSelect(element);
-      manualIndexLocked = false;
-    }
+    options.onSelect(element);
+    manualIndexLocked = false;
   }
 
-  function handleDoubleClick(event) {
-    if (!enabled || getSelectionMode() === 'mask') {
+  function handleContextMenu(event) {
+    if (!enabled || !isSelectionActive() || getSelectionMode() === 'mask') {
       return;
     }
 
@@ -805,7 +858,7 @@ function createSelectorManager(options) {
   }
 
   function handleKeydown(event) {
-    if (!enabled || isEditableTarget(event.target)) {
+    if (!enabled || !isSelectionActive() || isEditableTarget(event.target)) {
       return;
     }
 
@@ -829,7 +882,7 @@ function createSelectorManager(options) {
       enabled = true;
       window.addEventListener('pointermove', handlePointerMove, true);
       window.addEventListener('click', handleClick, true);
-      window.addEventListener('dblclick', handleDoubleClick, true);
+      window.addEventListener('contextmenu', handleContextMenu, true);
       window.addEventListener('keydown', handleKeydown, true);
 
       if (lastPoint) {
@@ -847,7 +900,7 @@ function createSelectorManager(options) {
       manualIndexLocked = false;
       window.removeEventListener('pointermove', handlePointerMove, true);
       window.removeEventListener('click', handleClick, true);
-      window.removeEventListener('dblclick', handleDoubleClick, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
       window.removeEventListener('keydown', handleKeydown, true);
       notifyCandidate();
     },
@@ -1025,11 +1078,17 @@ function detectSurfaceTone(element, contrastMode) {
 
   let current = element;
   while (current && current instanceof HTMLElement) {
-    const rgb = parseRgbColor(window.getComputedStyle(current).backgroundColor);
+    const computedStyle = window.getComputedStyle(current);
+    const rgb = parseRgbColor(computedStyle.backgroundColor);
     if (rgb && rgb.a > 0.05) {
       return luminanceFromRgb(rgb) > 0.45 ? 'light' : 'dark';
     }
     current = current.parentElement;
+  }
+
+  const textRgb = parseRgbColor(window.getComputedStyle(element).color);
+  if (textRgb) {
+    return luminanceFromRgb(textRgb) > 0.55 ? 'dark' : 'light';
   }
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1225,7 +1284,12 @@ function createExporters(options) {
   }
 
   function buildMarkdown(context) {
-    const { language, i18n, annotations, globalNote } = context;
+    const {
+      language,
+      i18n,
+      annotations,
+      businessNote = context.globalNote
+    } = context;
     const lines = [];
 
     lines.push(`${i18n.t(language, 'pageTitle')}：${document.title}`);
@@ -1242,7 +1306,7 @@ function createExporters(options) {
     });
 
     lines.push(`${i18n.t(language, 'businessNote')}：`);
-    lines.push(globalNote ? globalNote.trim() : '-');
+    lines.push(businessNote ? businessNote.trim() : '-');
     lines.push('');
     lines.push(`${i18n.t(language, 'extraInfo')}：`);
     lines.push(`- ${i18n.t(language, 'viewportInfo')}：${window.innerWidth} x ${window.innerHeight}`);
@@ -2087,15 +2151,20 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-input,
-.pinfix-global-input {
+.pinfix-global-input,
+.pinfix-global-template-title {
   width: 100%;
   border: 0;
   outline: none;
-  resize: none;
   background: transparent;
   color: inherit;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.pinfix-note-input,
+.pinfix-global-input {
+  resize: none;
 }
 
 .pinfix-note-input {
@@ -2138,8 +2207,13 @@ function getPinFixStyles() {
   bottom: 12px;
   transform: translateX(-50%);
   width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   border-radius: 18px;
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .pinfix-global-head {
@@ -2147,19 +2221,234 @@ function getPinFixStyles() {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+}
+
+.pinfix-global-template-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pinfix-global-template-scroll {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pinfix-global-template-chip,
+.pinfix-global-template-add,
+.pinfix-global-template-option,
+.pinfix-global-template-danger {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.92);
+  color: inherit;
+}
+
+.pinfix-global-template-chip,
+.pinfix-global-template-add {
+  flex: 0 0 auto;
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.pinfix-global-template-chip.is-active,
+.pinfix-global-template-add.is-active {
+  border-color: rgba(15, 118, 110, 0.38);
+  background: rgba(222, 247, 244, 0.96);
+  color: #0f766e;
+}
+
+.pinfix-global-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
+
+.pinfix-global-note-body,
+.pinfix-global-picker,
+.pinfix-global-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pinfix-global-helper {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.pinfix-global-picker {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.pinfix-global-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .pinfix-global-resize {
-  height: 10px;
-  margin-top: 10px;
+  width: 88px;
+  height: 12px;
+  margin-top: auto;
+  align-self: center;
   cursor: ns-resize;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(15, 118, 110, 0.18), rgba(15, 118, 110, 0.48));
+  background:
+    linear-gradient(90deg, rgba(15, 118, 110, 0.14), rgba(15, 118, 110, 0.32)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(15, 118, 110, 0.52) 0 8px,
+      transparent 8px 14px
+    );
 }
 
 .pinfix-global-input {
-  min-height: 180px;
+  min-height: 160px;
+}
+
+.pinfix-global-note-input {
+  min-height: 124px;
+}
+
+.pinfix-global-template-title {
+  min-height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 9px 12px;
+  background: rgba(248, 250, 252, 0.82);
+  font-size: 13px;
+}
+
+.pinfix-global-template-options {
+  display: grid;
+  gap: 8px;
+}
+
+.pinfix-global-template-option {
+  width: 100%;
+  border-radius: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.pinfix-global-template-option.is-selected {
+  border-color: rgba(15, 118, 110, 0.4);
+  background: rgba(222, 247, 244, 0.92);
+}
+
+.pinfix-global-template-option-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.pinfix-global-template-option.is-selected .pinfix-global-template-option-check {
+  border-color: rgba(15, 118, 110, 0.46);
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.pinfix-global-template-option-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pinfix-global-template-option-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.pinfix-global-template-option-preview {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pinfix-global-template-content {
+  min-height: 220px;
+}
+
+.pinfix-global-template-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pinfix-global-template-danger {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  cursor: pointer;
+  color: #b91c1c;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.pinfix-global-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  padding: 14px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-field-label,
+.pinfix-global-panel.is-dark .pinfix-global-empty,
+.pinfix-global-panel.is-dark .pinfix-global-helper,
+.pinfix-global-panel.is-dark .pinfix-global-template-option-preview {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-picker {
+  border-top-color: rgba(148, 163, 184, 0.2);
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-template-chip,
+.pinfix-global-panel.is-dark .pinfix-global-template-add,
+.pinfix-global-panel.is-dark .pinfix-global-template-option,
+.pinfix-global-panel.is-dark .pinfix-global-template-title,
+.pinfix-global-panel.is-dark .pinfix-global-template-danger {
+  background: rgba(30, 41, 59, 0.78);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #f8fafc;
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-template-chip.is-active,
+.pinfix-global-panel.is-dark .pinfix-global-template-add.is-active,
+.pinfix-global-panel.is-dark .pinfix-global-template-option.is-selected {
+  background: rgba(15, 118, 110, 0.28);
+  border-color: rgba(45, 212, 191, 0.42);
+  color: #ccfbf1;
 }
 
 .pinfix-toast {
@@ -2225,7 +2514,8 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-card textarea::placeholder,
-.pinfix-global-panel textarea::placeholder {
+.pinfix-global-panel textarea::placeholder,
+.pinfix-global-panel input::placeholder {
   color: currentColor;
   opacity: 0.48;
 }
@@ -2289,6 +2579,9 @@ function createUI(options) {
   let sidecarLocked = false;
   let sidecarCloseTimer = null;
   let latestState = null;
+  let pendingTextSelection = null;
+  let isResizingGlobalPanel = false;
+  let liveGlobalPanelHeight = 0;
   const viewportMargin = 12;
 
   function getLanguage() {
@@ -2383,6 +2676,7 @@ function createUI(options) {
     root.addEventListener('pointerout', handlePointerOut);
 
     document.addEventListener('pointerdown', handleDocumentPointerDown, true);
+    document.addEventListener('dblclick', handleDocumentDoubleClick, true);
   }
 
   function unmount() {
@@ -2398,6 +2692,7 @@ function createUI(options) {
     cancelSidecarClose();
 
     document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
+    document.removeEventListener('dblclick', handleDocumentDoubleClick, true);
     root.remove();
     root = null;
   }
@@ -2417,6 +2712,18 @@ function createUI(options) {
     if (sidecarLocked && !event.target.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger')) {
       closeAnnotationSidecar();
     }
+  }
+
+  function handleDocumentDoubleClick(event) {
+    if (!root || !latestState || !latestState.open) {
+      return;
+    }
+
+    if (root.contains(event.target)) {
+      return;
+    }
+
+    options.onHideNotes();
   }
 
   function handleClick(event) {
@@ -2443,6 +2750,21 @@ function createUI(options) {
     }
     if (action === 'close-global') {
       options.onToggleGlobal(false);
+    }
+    if (action === 'show-global-note') {
+      options.onShowGlobalNoteView();
+    }
+    if (action === 'show-global-template') {
+      options.onShowGlobalTemplate(actionTarget.dataset.id);
+    }
+    if (action === 'create-global-template') {
+      options.onCreateGlobalTemplate();
+    }
+    if (action === 'delete-global-template') {
+      options.onDeleteGlobalTemplate(actionTarget.dataset.id);
+    }
+    if (action === 'toggle-global-template-selection') {
+      options.onToggleGlobalTemplateSelection(actionTarget.dataset.id);
     }
     if (action === 'tool') {
       if (actionTarget.dataset.tool === 'capture') {
@@ -2508,17 +2830,22 @@ function createUI(options) {
 
   function handleDoubleClick(event) {
     const actionTarget = event.target.closest('[data-action="tool"][data-tool="capture"]');
-    if (!actionTarget) {
+    if (actionTarget) {
+      event.preventDefault();
+      window.clearTimeout(toolClickTimer);
+      toolClickTimer = null;
+      if (Date.now() - lastQuickScreenshotAt < 500) {
+        return;
+      }
+      runQuickScreenshotShortcut();
       return;
     }
 
-    event.preventDefault();
-    window.clearTimeout(toolClickTimer);
-    toolClickTimer = null;
-    if (Date.now() - lastQuickScreenshotAt < 500) {
+    if (event.target.closest('#pinfix-root')) {
       return;
     }
-    runQuickScreenshotShortcut();
+
+    options.onHideNotes();
   }
 
   function runQuickScreenshotShortcut() {
@@ -2528,22 +2855,35 @@ function createUI(options) {
     options.onQuickScreenshot();
   }
 
+  function isGlobalTemplateField(target) {
+    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+      ? target.dataset.templateField === 'title' || target.dataset.templateField === 'content'
+      : false;
+  }
+
   function handleInput(event) {
-    const textarea = event.target;
-    if (!(textarea instanceof HTMLTextAreaElement)) {
+    const field = event.target;
+    if (!(field instanceof HTMLTextAreaElement) && !(field instanceof HTMLInputElement)) {
       return;
     }
 
-    if (textarea.dataset.noteId) {
-      autoGrow(textarea, 220);
-      options.onChangeNote(textarea.dataset.noteId, textarea.value, false);
-      syncSummary(textarea);
-      syncMissingNoteState(textarea);
+    if (field.dataset.noteId) {
+      autoGrow(field, 220);
+      options.onChangeNote(field.dataset.noteId, field.value, false);
+      syncSummary(field);
+      syncMissingNoteState(field);
     }
 
-    if (textarea.dataset.globalNote === 'true') {
-      autoGrow(textarea, Number(textarea.dataset.maxHeight || 320));
-      options.onChangeGlobalNote(textarea.value);
+    if (field.dataset.globalNote === 'true') {
+      autoGrow(field, Number(field.dataset.maxHeight || 320));
+      options.onChangeGlobalNote(field.value);
+    }
+
+    if (isGlobalTemplateField(field)) {
+      if (field instanceof HTMLTextAreaElement) {
+        autoGrow(field, Number(field.dataset.maxHeight || 240));
+      }
+      options.onChangeGlobalTemplateDraft(field.dataset.templateField, field.value);
     }
   }
 
@@ -2557,9 +2897,9 @@ function createUI(options) {
       openAnnotationSidecar(false);
     }
 
-    const textarea = event.target;
-    if (textarea instanceof HTMLTextAreaElement && textarea.dataset.noteId) {
-      setCardExpanded(textarea.closest('.pinfix-note-card'), true);
+    const field = event.target;
+    if (field instanceof HTMLTextAreaElement && field.dataset.noteId) {
+      setCardExpanded(field.closest('.pinfix-note-card'), true);
     }
   }
 
@@ -2573,13 +2913,22 @@ function createUI(options) {
       scheduleSidecarClose();
     }
 
-    const textarea = event.target;
-    if (!(textarea instanceof HTMLTextAreaElement)) {
+    const field = event.target;
+    if (!(field instanceof HTMLTextAreaElement) && !(field instanceof HTMLInputElement)) {
       return;
     }
 
-    if (textarea.dataset.noteId) {
-      options.onChangeNote(textarea.dataset.noteId, textarea.value, true);
+    if (field.dataset.noteId) {
+      options.onChangeNote(field.dataset.noteId, field.value, true);
+      return;
+    }
+
+    if (isGlobalTemplateField(field)) {
+      const currentEditor = field.closest('[data-template-editor="true"]');
+      if (nextFocus && currentEditor && currentEditor.contains(nextFocus)) {
+        return;
+      }
+      options.onCommitGlobalTemplate(!nextFocus || !root.contains(nextFocus));
     }
   }
 
@@ -2750,6 +3099,7 @@ function createUI(options) {
 
   function render(state) {
     mount();
+    captureTextSelection();
     latestState = state;
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
@@ -2766,11 +3116,14 @@ function createUI(options) {
     renderCountdown(state);
     positionTooltip();
     focusEditingNote(state);
+    restoreTextSelection();
   }
 
   function renderClosedState() {
     closeAnnotationSidecar();
     hideTooltip();
+    isResizingGlobalPanel = false;
+    liveGlobalPanelHeight = 0;
     if (overlayLayer) {
       overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
     }
@@ -2803,6 +3156,52 @@ function createUI(options) {
     }
   }
 
+  function captureTextSelection() {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLTextAreaElement)) {
+      pendingTextSelection = null;
+      return;
+    }
+
+    if (!active.dataset.noteId && active.dataset.globalNote !== 'true') {
+      pendingTextSelection = null;
+      return;
+    }
+
+    pendingTextSelection = {
+      noteId: active.dataset.noteId || '',
+      globalNote: active.dataset.globalNote === 'true',
+      start: active.selectionStart,
+      end: active.selectionEnd,
+      scrollTop: active.scrollTop
+    };
+  }
+
+  function restoreTextSelection() {
+    if (!pendingTextSelection) {
+      return;
+    }
+
+    const snapshot = pendingTextSelection;
+    pendingTextSelection = null;
+    window.requestAnimationFrame(() => {
+      const input = snapshot.globalNote
+        ? root.querySelector('[data-global-note="true"]')
+        : Array.from(root.querySelectorAll('[data-note-id]')).find((node) => node.dataset.noteId === snapshot.noteId);
+
+      if (!(input instanceof HTMLTextAreaElement)) {
+        return;
+      }
+
+      const start = clamp(snapshot.start, 0, input.value.length);
+      const end = clamp(snapshot.end, 0, input.value.length);
+      input.focus();
+      input.setSelectionRange(start, end);
+      input.scrollTop = snapshot.scrollTop;
+      autoGrow(input, snapshot.globalNote ? Number(input.dataset.maxHeight || 320) : 220);
+    });
+  }
+
   function focusEditingNote(state) {
     if (!state.editingAnnotationId) {
       return;
@@ -2819,6 +3218,8 @@ function createUI(options) {
       if (input) {
         input.focus();
         autoGrow(input, 220);
+        const end = input.value.length;
+        input.setSelectionRange(end, end);
       }
     });
   }
@@ -2852,7 +3253,9 @@ function createUI(options) {
       >${iconSvg('close')}</button>
       ${buttons
       .map((button) => {
-        const active = button.tool === state.tool || button.tool === state.activePopover;
+        const active = button.tool === 'select'
+          ? state.tool === 'select' && state.selectionActive
+          : button.tool === state.tool || button.tool === state.activePopover;
         return `
           <button
             class="pinfix-tool-button ${active ? 'is-active' : ''}"
@@ -3202,7 +3605,7 @@ function createUI(options) {
     candidate.innerHTML = '';
 
     const currentCandidate = state.candidate;
-    if (!currentCandidate || !state.open || state.tool !== 'select' || state.captureHidden) {
+    if (!currentCandidate || !state.open || state.tool !== 'select' || !state.selectionActive || state.captureHidden || state.globalNoteOpen) {
       candidate.classList.add('pinfix-hidden');
     } else {
       const displayRect = clampBoxRect(expandRect(currentCandidate, candidatePadding));
@@ -3394,6 +3797,123 @@ function createUI(options) {
     }
   }
 
+  function getTemplateDisplayName(template) {
+    const title = String(template && template.title ? template.title : '').trim();
+    return title || t('templateUntitled');
+  }
+
+  function renderGlobalTemplateTabs(state) {
+    const draftActive = state.globalNoteView === 'template' && !state.activeTemplateId && state.draftTemplate;
+    return `
+      <div class="pinfix-global-template-bar">
+        <div class="pinfix-global-template-scroll">
+          <button
+            type="button"
+            class="pinfix-global-template-chip ${state.globalNoteView === 'note' ? 'is-active' : ''}"
+            data-action="show-global-note"
+          >${escapeHtml(t('globalNoteTab'))}</button>
+          ${state.templates.map((template) => `
+            <button
+              type="button"
+              class="pinfix-global-template-chip ${state.globalNoteView === 'template' && state.activeTemplateId === template.id ? 'is-active' : ''}"
+              data-action="show-global-template"
+              data-id="${template.id}"
+            >${escapeHtml(getTemplateDisplayName(template))}</button>
+          `).join('')}
+        </div>
+        <button
+          type="button"
+          class="pinfix-global-template-add ${draftActive ? 'is-active' : ''}"
+          data-action="create-global-template"
+          aria-label="${escapeHtml(t('templateAdd'))}"
+          title="${escapeHtml(t('templateAdd'))}"
+        >+</button>
+      </div>
+    `;
+  }
+
+  function renderGlobalTemplateOptions(state) {
+    if (!state.templates.length) {
+      return `<div class="pinfix-global-empty">${escapeHtml(t('templateEmptyHint'))}</div>`;
+    }
+
+    const selectedIds = new Set(state.selectedTemplateIds || []);
+    return `
+      <div class="pinfix-global-template-options">
+        ${state.templates.map((template) => {
+          const selected = selectedIds.has(template.id);
+          const preview = summariseNote(template.content) || t('templatePreviewEmpty');
+          return `
+            <button
+              type="button"
+              class="pinfix-global-template-option ${selected ? 'is-selected' : ''}"
+              data-action="toggle-global-template-selection"
+              data-id="${template.id}"
+            >
+              <span class="pinfix-global-template-option-check">${selected ? '&#10003;' : ''}</span>
+              <span class="pinfix-global-template-option-body">
+                <span class="pinfix-global-template-option-name">${escapeHtml(getTemplateDisplayName(template))}</span>
+                <span class="pinfix-global-template-option-preview">${escapeHtml(preview)}</span>
+              </span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderGlobalTemplateEditor(state, panelHeight) {
+    const draft = state.draftTemplate || { title: '', content: '' };
+    return `
+      <div class="pinfix-global-editor" data-template-editor="true">
+        <div class="pinfix-global-helper">${escapeHtml(t('templateAutoSaveHint'))}</div>
+        <div class="pinfix-global-field-label">${escapeHtml(t('templateTitleLabel'))}</div>
+        <input
+          class="pinfix-global-template-title"
+          type="text"
+          data-template-field="title"
+          value="${escapeHtml(draft.title || '')}"
+          placeholder="${escapeHtml(t('templateTitlePlaceholder'))}"
+        />
+        <div class="pinfix-global-field-label">${escapeHtml(t('templateContentLabel'))}</div>
+        <textarea
+          class="pinfix-global-input pinfix-global-template-content"
+          data-template-field="content"
+          data-max-height="${Math.max(280, window.innerHeight - 280)}"
+          placeholder="${escapeHtml(t('templateContentPlaceholder'))}"
+        >${escapeHtml(draft.content || '')}</textarea>
+        ${state.activeTemplateId ? `
+          <div class="pinfix-global-template-actions">
+            <button
+              type="button"
+              class="pinfix-global-template-danger"
+              data-action="delete-global-template"
+              data-id="${state.activeTemplateId}"
+            >${escapeHtml(t('templateDelete'))}</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  function renderGlobalNoteBody(state, panelHeight) {
+    return `
+      <div class="pinfix-global-note-body">
+        <div class="pinfix-global-helper">${escapeHtml(t('globalNoteMergeHint'))}</div>
+        <textarea
+          class="pinfix-global-input pinfix-global-note-input"
+          data-global-note="true"
+          data-max-height="${Math.max(140, Math.floor(panelHeight * 0.34))}"
+          placeholder="${escapeHtml(t('globalNotesHint'))}"
+        >${escapeHtml(state.globalNote || '')}</textarea>
+      </div>
+      <div class="pinfix-global-picker">
+        <div class="pinfix-global-field-label">${escapeHtml(t('templateSelectionTitle'))}</div>
+        ${renderGlobalTemplateOptions(state)}
+      </div>
+    `;
+  }
+
   function renderGlobalNotes(state) {
     globalStrip.classList.toggle('pinfix-hidden', state.globalNoteOpen);
     globalPanel.classList.toggle('pinfix-hidden', !state.globalNoteOpen);
@@ -3402,33 +3922,44 @@ function createUI(options) {
     globalPanel.classList.toggle('is-dark', state.pageTone === 'dark');
 
     if (!state.globalNoteOpen) {
+      isResizingGlobalPanel = false;
+      liveGlobalPanelHeight = 0;
       return;
     }
+
+    const panelHeight = isResizingGlobalPanel && liveGlobalPanelHeight
+      ? liveGlobalPanelHeight
+      : state.globalNoteHeight;
 
     globalPanel.innerHTML = `
       <div class="pinfix-global-head">
         <strong>${escapeHtml(t('globalNotes'))}</strong>
         <button type="button" class="pinfix-note-delete" data-action="close-global">&times;</button>
       </div>
-      <textarea
-        class="pinfix-global-input"
-        data-global-note="true"
-        data-max-height="${Math.max(state.globalNoteHeight - 80, 120)}"
-        placeholder="${escapeHtml(t('globalNotesHint'))}"
-      >${escapeHtml(state.globalNote || '')}</textarea>
+      ${renderGlobalTemplateTabs(state)}
+      <div class="pinfix-global-content">
+        ${state.globalNoteView === 'template'
+          ? renderGlobalTemplateEditor(state, panelHeight)
+          : renderGlobalNoteBody(state, panelHeight)}
+      </div>
       <div class="pinfix-global-resize" data-role="resize-global"></div>
     `;
-    globalPanel.style.height = `${state.globalNoteHeight}px`;
+    globalPanel.style.height = `${panelHeight}px`;
 
-    const textarea = globalPanel.querySelector('.pinfix-global-input');
-    if (textarea) {
-      autoGrow(textarea, Math.max(state.globalNoteHeight - 80, 120));
+    const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
+    if (noteTextarea) {
+      autoGrow(noteTextarea, Number(noteTextarea.dataset.maxHeight || 320));
     }
 
-    bindGlobalResize();
+    const templateTextarea = globalPanel.querySelector('[data-template-field="content"]');
+    if (templateTextarea) {
+      autoGrow(templateTextarea, Number(templateTextarea.dataset.maxHeight || 240));
+    }
+
+    bindGlobalResize(panelHeight);
   }
 
-  function bindGlobalResize() {
+  function bindGlobalResize(panelHeight) {
     if (resizeCleanup) {
       resizeCleanup();
       resizeCleanup = null;
@@ -3439,24 +3970,38 @@ function createUI(options) {
       return;
     }
 
+    let startY = 0;
+    let startHeight = panelHeight;
+
     const pointerMove = (event) => {
-      options.onResizeGlobalNote(clamp(window.innerHeight - event.clientY + 20, 180, 480));
+      const nextHeight = clamp(startHeight - (event.clientY - startY), 360, 680);
+      liveGlobalPanelHeight = nextHeight;
+      globalPanel.style.height = `${nextHeight}px`;
     };
 
     const pointerUp = () => {
       window.removeEventListener('pointermove', pointerMove, true);
       window.removeEventListener('pointerup', pointerUp, true);
+      if (!isResizingGlobalPanel) {
+        return;
+      }
+
+      isResizingGlobalPanel = false;
+      if (liveGlobalPanelHeight) {
+        options.onResizeGlobalNote(liveGlobalPanelHeight);
+      }
+      liveGlobalPanelHeight = 0;
     };
 
-    handle.addEventListener(
-      'pointerdown',
-      (event) => {
-        event.preventDefault();
-        window.addEventListener('pointermove', pointerMove, true);
-        window.addEventListener('pointerup', pointerUp, true);
-      },
-      { once: true }
-    );
+    handle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      isResizingGlobalPanel = true;
+      startY = event.clientY;
+      startHeight = globalPanel.getBoundingClientRect().height;
+      liveGlobalPanelHeight = startHeight;
+      window.addEventListener('pointermove', pointerMove, true);
+      window.addEventListener('pointerup', pointerUp, true);
+    });
 
     resizeCleanup = pointerUp;
   }
@@ -3717,6 +4262,7 @@ function createPinFixApp() {
     open: false,
     tool: 'select',
     selectionMode: 'annotate',
+    selectionActive: true,
     activePopover: null,
     captureMode: false,
     captureHidden: false,
@@ -3725,9 +4271,14 @@ function createPinFixApp() {
     candidateElement: null,
     annotations: [],
     masks: [],
+    templates: storage.loadTemplates().map((template) => hydrateTemplate(template)),
+    selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 260,
+    globalNoteHeight: 380,
+    globalNoteView: 'note',
+    activeTemplateId: '',
+    draftTemplate: null,
     toast: '',
     history: [],
     highlightedAnnotationId: '',
@@ -3749,10 +4300,8 @@ function createPinFixApp() {
       state.activePopover = null;
       render();
     },
-    onToggleGlobal: (next) => {
-      state.globalNoteOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
-      render();
-    },
+    onToggleGlobal: (next) => toggleGlobalPanel(next),
+    onHideNotes: () => hideAnnotationNotes(),
     onTool: (tool) => handleTool(tool),
     onQuickScreenshot: () => quickScreenshot(),
     onSetSetting: (key, value) => updateSetting(key, value),
@@ -3769,16 +4318,23 @@ function createPinFixApp() {
     onCandidatePick: (kind) => addCandidateSelection(kind),
     onChangeNote: (id, value, saveNow) => updateNote(id, value, saveNow),
     onChangeGlobalNote: (value) => updateGlobalNote(value),
+    onShowGlobalNoteView: () => showGlobalNoteView(),
+    onShowGlobalTemplate: (id) => showGlobalTemplate(id),
+    onCreateGlobalTemplate: () => createGlobalTemplateDraft(),
+    onChangeGlobalTemplateDraft: (field, value) => updateGlobalTemplateDraft(field, value),
+    onCommitGlobalTemplate: (shouldRender) => commitGlobalTemplateDraft(shouldRender),
+    onDeleteGlobalTemplate: (id) => deleteGlobalTemplate(id),
+    onToggleGlobalTemplateSelection: (id) => toggleGlobalTemplateSelection(id),
     onResizeGlobalNote: (height) => {
       state.globalNoteHeight = height;
       savePageData();
-      render();
     }
   });
 
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     getSelectionMode: () => state.selectionMode,
+    isSelectionActive: () => state.selectionActive,
     onCandidateChange: ({ element }) => {
       state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
@@ -3786,6 +4342,15 @@ function createPinFixApp() {
     },
     onSelect: (element) => addSelectionItem(element)
   });
+
+  function setSelectionActive(active) {
+    state.selectionActive = Boolean(active);
+    if (!state.selectionActive) {
+      clearCandidate();
+    } else if (selector.isEnabled()) {
+      selector.refresh();
+    }
+  }
 
   const exporters = createExporters({
     beforeCapture: async () => {
@@ -3813,6 +4378,61 @@ function createPinFixApp() {
     return getAnnotationReviewSummary(state.annotations, state.masks);
   }
 
+  function hydrateTemplate(template) {
+    const now = Date.now();
+    return {
+      id: template && template.id ? template.id : createId('template'),
+      title: template && typeof template.title === 'string' ? template.title : '',
+      content: template && typeof template.content === 'string' ? template.content : '',
+      createdAt: template && Number.isFinite(Number(template.createdAt)) ? Number(template.createdAt) : now,
+      updatedAt: template && Number.isFinite(Number(template.updatedAt)) ? Number(template.updatedAt) : now
+    };
+  }
+
+  function saveTemplates() {
+    storage.saveTemplates(state.templates);
+  }
+
+  function hasTemplateDraftContent(template) {
+    if (!template) {
+      return false;
+    }
+
+    return Boolean(String(template.title || '').trim() || String(template.content || '').trim());
+  }
+
+  function getValidSelectedTemplateIds(templateIds) {
+    const validIds = new Set(state.templates.map((template) => template.id));
+    const result = [];
+    (Array.isArray(templateIds) ? templateIds : []).forEach((templateId) => {
+      if (!validIds.has(templateId) || result.includes(templateId)) {
+        return;
+      }
+      result.push(templateId);
+    });
+    return result;
+  }
+
+  function getCombinedBusinessNote() {
+    const parts = [];
+    const noteText = String(state.globalNote || '').trim();
+    if (noteText) {
+      parts.push(noteText);
+    }
+
+    state.templates.forEach((template) => {
+      if (!state.selectedTemplateIds.includes(template.id)) {
+        return;
+      }
+      const content = String(template.content || '').trim();
+      if (content) {
+        parts.push(content);
+      }
+    });
+
+    return parts.join('\n');
+  }
+
   function loadPageData() {
     const pageData = storage.loadPageData(window.location.href);
     state.settings = {
@@ -3822,10 +4442,14 @@ function createPinFixApp() {
     state.annotations = (pageData.annotations || []).map((annotation) => hydrateAnnotation(annotation));
     state.masks = (pageData.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = pageData.globalNote || '';
+    state.selectedTemplateIds = getValidSelectedTemplateIds(pageData.selectedTemplateIds);
     state.activeAnnotationId = '';
     state.editingAnnotationId = '';
+    state.globalNoteView = 'note';
+    state.activeTemplateId = '';
+    state.draftTemplate = null;
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? pageData.pageSettings.globalNoteHeight
+      ? Math.max(pageData.pageSettings.globalNoteHeight, 360)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -3882,6 +4506,7 @@ function createPinFixApp() {
       annotations: state.annotations,
       masks: state.masks,
       globalNote: state.globalNote,
+      selectedTemplateIds: state.selectedTemplateIds,
       pageSettings: {
         colorPreset: state.settings.colorPreset,
         lineWidth: state.settings.lineWidth,
@@ -3925,7 +4550,8 @@ function createPinFixApp() {
     state.history.push({
       annotations: JSON.parse(JSON.stringify(state.annotations)),
       masks: JSON.parse(JSON.stringify(state.masks)),
-      globalNote: state.globalNote
+      globalNote: state.globalNote,
+      selectedTemplateIds: [...state.selectedTemplateIds]
     });
 
     if (state.history.length > 30) {
@@ -3968,6 +4594,17 @@ function createPinFixApp() {
   function clearCandidate() {
     state.candidate = null;
     state.candidateElement = null;
+  }
+
+  function hideAnnotationNotes() {
+    if (!state.activeAnnotationId && !state.editingAnnotationId) {
+      return;
+    }
+
+    state.activeAnnotationId = '';
+    state.editingAnnotationId = '';
+    savePageData();
+    render();
   }
 
   function markAnnotationFocused(id) {
@@ -4181,6 +4818,163 @@ function createPinFixApp() {
     savePageData();
   }
 
+  function toggleGlobalPanel(next) {
+    const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
+    state.globalNoteOpen = nextOpen;
+    if (nextOpen) {
+      state.globalNoteView = 'note';
+      state.activeTemplateId = '';
+      state.draftTemplate = null;
+    }
+    render();
+  }
+
+  function showGlobalNoteView() {
+    state.globalNoteView = 'note';
+    state.activeTemplateId = '';
+    state.draftTemplate = null;
+    render();
+  }
+
+  function showGlobalTemplate(id) {
+    const template = state.templates.find((item) => item.id === id);
+    if (!template) {
+      return;
+    }
+
+    state.globalNoteView = 'template';
+    state.activeTemplateId = id;
+    state.draftTemplate = {
+      title: template.title,
+      content: template.content
+    };
+    render();
+  }
+
+  function createGlobalTemplateDraft() {
+    state.globalNoteView = 'template';
+    state.activeTemplateId = '';
+    state.draftTemplate = {
+      title: '',
+      content: ''
+    };
+    render();
+  }
+
+  function updateGlobalTemplateDraft(field, value) {
+    if (!state.draftTemplate) {
+      state.draftTemplate = {
+        title: '',
+        content: ''
+      };
+    }
+
+    state.draftTemplate[field] = value;
+    clearPendingActionConfirm();
+  }
+
+  function commitGlobalTemplateDraft(shouldRender = true) {
+    if (!state.draftTemplate) {
+      return;
+    }
+
+    const draft = {
+      title: typeof state.draftTemplate.title === 'string' ? state.draftTemplate.title : '',
+      content: typeof state.draftTemplate.content === 'string' ? state.draftTemplate.content : ''
+    };
+
+    if (!state.activeTemplateId) {
+      if (!hasTemplateDraftContent(draft)) {
+        state.draftTemplate = null;
+        state.globalNoteView = 'note';
+        if (shouldRender) {
+          render();
+        }
+        return;
+      }
+
+      const now = Date.now();
+      const template = hydrateTemplate({
+        id: createId('template'),
+        title: draft.title,
+        content: draft.content,
+        createdAt: now,
+        updatedAt: now
+      });
+      state.templates.push(template);
+      state.activeTemplateId = template.id;
+      state.draftTemplate = {
+        title: template.title,
+        content: template.content
+      };
+      saveTemplates();
+      if (shouldRender) {
+        render();
+      }
+      return;
+    }
+
+    const template = state.templates.find((item) => item.id === state.activeTemplateId);
+    if (!template) {
+      state.draftTemplate = null;
+      state.globalNoteView = 'note';
+      state.activeTemplateId = '';
+      if (shouldRender) {
+        render();
+      }
+      return;
+    }
+
+    if (template.title === draft.title && template.content === draft.content) {
+      return;
+    }
+
+    template.title = draft.title;
+    template.content = draft.content;
+    template.updatedAt = Date.now();
+    saveTemplates();
+    if (shouldRender) {
+      render();
+    }
+  }
+
+  function deleteGlobalTemplate(id) {
+    const template = state.templates.find((item) => item.id === id);
+    if (!template) {
+      return;
+    }
+
+    if (!window.confirm(i18n.t(getLanguage(), 'templateDeleteConfirm'))) {
+      return;
+    }
+
+    state.templates = state.templates.filter((item) => item.id !== id);
+    state.selectedTemplateIds = state.selectedTemplateIds.filter((templateId) => templateId !== id);
+    state.activeTemplateId = '';
+    state.draftTemplate = null;
+    state.globalNoteView = 'note';
+    saveTemplates();
+    savePageData();
+    render();
+  }
+
+  function toggleGlobalTemplateSelection(id) {
+    if (!state.templates.some((template) => template.id === id)) {
+      return;
+    }
+
+    if (state.selectedTemplateIds.includes(id)) {
+      state.selectedTemplateIds = state.selectedTemplateIds.filter((templateId) => templateId !== id);
+    } else {
+      state.selectedTemplateIds = [...state.selectedTemplateIds, id];
+    }
+
+    state.selectedTemplateIds = getValidSelectedTemplateIds(state.selectedTemplateIds);
+    clearPendingActionConfirm();
+    savePageData();
+    render();
+  }
+
   function deleteAnnotation(id) {
     takeHistorySnapshot();
     state.annotations = state.annotations.filter((item) => item.id !== id);
@@ -4214,6 +5008,7 @@ function createPinFixApp() {
     state.annotations = [];
     state.masks = [];
     state.globalNote = '';
+    state.selectedTemplateIds = [];
     state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
@@ -4248,6 +5043,7 @@ function createPinFixApp() {
     state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = snapshot.globalNote;
+    state.selectedTemplateIds = getValidSelectedTemplateIds(snapshot.selectedTemplateIds);
     state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
@@ -4282,6 +5078,7 @@ function createPinFixApp() {
     state.open = nextOpen;
     state.activePopover = null;
     state.tool = state.settings.lastTool || 'select';
+    setSelectionActive(true);
 
     if (nextOpen && state.tool === 'select') {
       selector.enable();
@@ -4300,6 +5097,7 @@ function createPinFixApp() {
         state.captureHidden = false;
         state.countdownRemaining = 0;
         state.toast = '';
+        setSelectionActive(false);
         clearCandidate();
       }
     }
@@ -4321,13 +5119,21 @@ function createPinFixApp() {
       state.tool = 'select';
       state.settings.lastTool = 'select';
       state.activePopover = null;
-      selector.enable();
+      state.selectionMode = 'annotate';
+      setSelectionActive(selector.isEnabled() ? !state.selectionActive : true);
+      if (state.selectionActive) {
+        selector.enable();
+        selector.refresh();
+      } else {
+        setSelectionActive(false);
+      }
       saveGlobalSettings();
       render();
       return;
     }
 
     selector.disable();
+    setSelectionActive(false);
     state.tool = tool;
     state.settings.lastTool = tool;
     state.activePopover = state.activePopover === tool ? null : tool;
@@ -4376,6 +5182,7 @@ function createPinFixApp() {
 
   function setSelectionMode(mode) {
     state.selectionMode = mode;
+    setSelectionActive(true);
     state.tool = 'select';
     state.settings.lastTool = 'select';
     state.activePopover = null;
@@ -4393,6 +5200,7 @@ function createPinFixApp() {
   function togglePrivacyMode() {
     if (state.selectionMode === 'mask') {
       state.selectionMode = 'annotate';
+      setSelectionActive(true);
       render();
       showToast('privacyModeOff');
       return;
@@ -4403,7 +5211,8 @@ function createPinFixApp() {
   }
 
   async function copyNotes() {
-    if (!state.annotations.length && !String(state.globalNote || '').trim()) {
+    const businessNote = getCombinedBusinessNote();
+    if (!state.annotations.length && !businessNote) {
       showToast('nothingToCopy');
       return;
     }
@@ -4418,7 +5227,7 @@ function createPinFixApp() {
         language: getLanguage(),
         i18n,
         annotations: state.annotations,
-        globalNote: state.globalNote
+        businessNote
       });
       showToast('copiedNotes');
     } catch (error) {
@@ -4648,11 +5457,17 @@ function createPinFixApp() {
       return;
     }
 
+    commitGlobalTemplateDraft(false);
     savePageData();
     lastUrl = nextUrl;
     loadPageData();
     clearPendingActionConfirm();
     render();
+  }
+
+  function handleBeforeUnload() {
+    commitGlobalTemplateDraft(false);
+    savePageData();
   }
 
   function attachRouteWatcher() {
@@ -4684,7 +5499,7 @@ function createPinFixApp() {
 
     window.addEventListener('resize', scheduleRefreshAnnotations);
     window.addEventListener('scroll', scheduleRefreshAnnotations, { passive: true });
-    window.addEventListener('beforeunload', savePageData);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('keydown', handleWindowKeydown, true);
   }
 

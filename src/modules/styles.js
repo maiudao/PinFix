@@ -711,15 +711,20 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-input,
-.pinfix-global-input {
+.pinfix-global-input,
+.pinfix-global-template-title {
   width: 100%;
   border: 0;
   outline: none;
-  resize: none;
   background: transparent;
   color: inherit;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.pinfix-note-input,
+.pinfix-global-input {
+  resize: none;
 }
 
 .pinfix-note-input {
@@ -762,8 +767,13 @@ function getPinFixStyles() {
   bottom: 12px;
   transform: translateX(-50%);
   width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   border-radius: 18px;
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .pinfix-global-head {
@@ -771,19 +781,234 @@ function getPinFixStyles() {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+}
+
+.pinfix-global-template-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pinfix-global-template-scroll {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pinfix-global-template-chip,
+.pinfix-global-template-add,
+.pinfix-global-template-option,
+.pinfix-global-template-danger {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.92);
+  color: inherit;
+}
+
+.pinfix-global-template-chip,
+.pinfix-global-template-add {
+  flex: 0 0 auto;
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.pinfix-global-template-chip.is-active,
+.pinfix-global-template-add.is-active {
+  border-color: rgba(15, 118, 110, 0.38);
+  background: rgba(222, 247, 244, 0.96);
+  color: #0f766e;
+}
+
+.pinfix-global-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
+
+.pinfix-global-note-body,
+.pinfix-global-picker,
+.pinfix-global-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pinfix-global-helper {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.pinfix-global-picker {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.pinfix-global-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .pinfix-global-resize {
-  height: 10px;
-  margin-top: 10px;
+  width: 88px;
+  height: 12px;
+  margin-top: auto;
+  align-self: center;
   cursor: ns-resize;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(15, 118, 110, 0.18), rgba(15, 118, 110, 0.48));
+  background:
+    linear-gradient(90deg, rgba(15, 118, 110, 0.14), rgba(15, 118, 110, 0.32)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(15, 118, 110, 0.52) 0 8px,
+      transparent 8px 14px
+    );
 }
 
 .pinfix-global-input {
-  min-height: 180px;
+  min-height: 160px;
+}
+
+.pinfix-global-note-input {
+  min-height: 124px;
+}
+
+.pinfix-global-template-title {
+  min-height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 9px 12px;
+  background: rgba(248, 250, 252, 0.82);
+  font-size: 13px;
+}
+
+.pinfix-global-template-options {
+  display: grid;
+  gap: 8px;
+}
+
+.pinfix-global-template-option {
+  width: 100%;
+  border-radius: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.pinfix-global-template-option.is-selected {
+  border-color: rgba(15, 118, 110, 0.4);
+  background: rgba(222, 247, 244, 0.92);
+}
+
+.pinfix-global-template-option-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.pinfix-global-template-option.is-selected .pinfix-global-template-option-check {
+  border-color: rgba(15, 118, 110, 0.46);
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.pinfix-global-template-option-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pinfix-global-template-option-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.pinfix-global-template-option-preview {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pinfix-global-template-content {
+  min-height: 220px;
+}
+
+.pinfix-global-template-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pinfix-global-template-danger {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  cursor: pointer;
+  color: #b91c1c;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.pinfix-global-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  padding: 14px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-field-label,
+.pinfix-global-panel.is-dark .pinfix-global-empty,
+.pinfix-global-panel.is-dark .pinfix-global-helper,
+.pinfix-global-panel.is-dark .pinfix-global-template-option-preview {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-picker {
+  border-top-color: rgba(148, 163, 184, 0.2);
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-template-chip,
+.pinfix-global-panel.is-dark .pinfix-global-template-add,
+.pinfix-global-panel.is-dark .pinfix-global-template-option,
+.pinfix-global-panel.is-dark .pinfix-global-template-title,
+.pinfix-global-panel.is-dark .pinfix-global-template-danger {
+  background: rgba(30, 41, 59, 0.78);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #f8fafc;
+}
+
+.pinfix-global-panel.is-dark .pinfix-global-template-chip.is-active,
+.pinfix-global-panel.is-dark .pinfix-global-template-add.is-active,
+.pinfix-global-panel.is-dark .pinfix-global-template-option.is-selected {
+  background: rgba(15, 118, 110, 0.28);
+  border-color: rgba(45, 212, 191, 0.42);
+  color: #ccfbf1;
 }
 
 .pinfix-toast {
@@ -849,7 +1074,8 @@ function getPinFixStyles() {
 }
 
 .pinfix-note-card textarea::placeholder,
-.pinfix-global-panel textarea::placeholder {
+.pinfix-global-panel textarea::placeholder,
+.pinfix-global-panel input::placeholder {
   color: currentColor;
   opacity: 0.48;
 }

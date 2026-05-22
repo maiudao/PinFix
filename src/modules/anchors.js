@@ -157,11 +157,17 @@ function detectSurfaceTone(element, contrastMode) {
 
   let current = element;
   while (current && current instanceof HTMLElement) {
-    const rgb = parseRgbColor(window.getComputedStyle(current).backgroundColor);
+    const computedStyle = window.getComputedStyle(current);
+    const rgb = parseRgbColor(computedStyle.backgroundColor);
     if (rgb && rgb.a > 0.05) {
       return luminanceFromRgb(rgb) > 0.45 ? 'light' : 'dark';
     }
     current = current.parentElement;
+  }
+
+  const textRgb = parseRgbColor(window.getComputedStyle(element).color);
+  if (textRgb) {
+    return luminanceFromRgb(textRgb) > 0.55 ? 'dark' : 'light';
   }
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

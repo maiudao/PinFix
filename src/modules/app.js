@@ -13,6 +13,7 @@ function createPinFixApp() {
     open: false,
     tool: 'select',
     selectionMode: 'annotate',
+    selectionActive: true,
     activePopover: null,
     captureMode: false,
     captureHidden: false,
@@ -21,9 +22,14 @@ function createPinFixApp() {
     candidateElement: null,
     annotations: [],
     masks: [],
+    templates: storage.loadTemplates().map((template) => hydrateTemplate(template)),
+    selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 260,
+    globalNoteHeight: 380,
+    globalNoteView: 'note',
+    activeTemplateId: '',
+    draftTemplate: null,
     toast: '',
     history: [],
     highlightedAnnotationId: '',
@@ -45,10 +51,8 @@ function createPinFixApp() {
       state.activePopover = null;
       render();
     },
-    onToggleGlobal: (next) => {
-      state.globalNoteOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
-      render();
-    },
+    onToggleGlobal: (next) => toggleGlobalPanel(next),
+    onHideNotes: () => hideAnnotationNotes(),
     onTool: (tool) => handleTool(tool),
     onQuickScreenshot: () => quickScreenshot(),
     onSetSetting: (key, value) => updateSetting(key, value),
@@ -65,16 +69,23 @@ function createPinFixApp() {
     onCandidatePick: (kind) => addCandidateSelection(kind),
     onChangeNote: (id, value, saveNow) => updateNote(id, value, saveNow),
     onChangeGlobalNote: (value) => updateGlobalNote(value),
+    onShowGlobalNoteView: () => showGlobalNoteView(),
+    onShowGlobalTemplate: (id) => showGlobalTemplate(id),
+    onCreateGlobalTemplate: () => createGlobalTemplateDraft(),
+    onChangeGlobalTemplateDraft: (field, value) => updateGlobalTemplateDraft(field, value),
+    onCommitGlobalTemplate: (shouldRender) => commitGlobalTemplateDraft(shouldRender),
+    onDeleteGlobalTemplate: (id) => deleteGlobalTemplate(id),
+    onToggleGlobalTemplateSelection: (id) => toggleGlobalTemplateSelection(id),
     onResizeGlobalNote: (height) => {
       state.globalNoteHeight = height;
       savePageData();
-      render();
     }
   });
 
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     getSelectionMode: () => state.selectionMode,
+    isSelectionActive: () => state.selectionActive,
     onCandidateChange: ({ element }) => {
       state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
@@ -82,6 +93,15 @@ function createPinFixApp() {
     },
     onSelect: (element) => addSelectionItem(element)
   });
+
+  function setSelectionActive(active) {
+    state.selectionActive = Boolean(active);
+    if (!state.selectionActive) {
+      clearCandidate();
+    } else if (selector.isEnabled()) {
+      selector.refresh();
+    }
+  }
 
   const exporters = createExporters({
     beforeCapture: async () => {
@@ -109,6 +129,61 @@ function createPinFixApp() {
     return getAnnotationReviewSummary(state.annotations, state.masks);
   }
 
+  function hydrateTemplate(template) {
+    const now = Date.now();
+    return {
+      id: template && template.id ? template.id : createId('template'),
+      title: template && typeof template.title === 'string' ? template.title : '',
+      content: template && typeof template.content === 'string' ? template.content : '',
+      createdAt: template && Number.isFinite(Number(template.createdAt)) ? Number(template.createdAt) : now,
+      updatedAt: template && Number.isFinite(Number(template.updatedAt)) ? Number(template.updatedAt) : now
+    };
+  }
+
+  function saveTemplates() {
+    storage.saveTemplates(state.templates);
+  }
+
+  function hasTemplateDraftContent(template) {
+    if (!template) {
+      return false;
+    }
+
+    return Boolean(String(template.title || '').trim() || String(template.content || '').trim());
+  }
+
+  function getValidSelectedTemplateIds(templateIds) {
+    const validIds = new Set(state.templates.map((template) => template.id));
+    const result = [];
+    (Array.isArray(templateIds) ? templateIds : []).forEach((templateId) => {
+      if (!validIds.has(templateId) || result.includes(templateId)) {
+        return;
+      }
+      result.push(templateId);
+    });
+    return result;
+  }
+
+  function getCombinedBusinessNote() {
+    const parts = [];
+    const noteText = String(state.globalNote || '').trim();
+    if (noteText) {
+      parts.push(noteText);
+    }
+
+    state.templates.forEach((template) => {
+      if (!state.selectedTemplateIds.includes(template.id)) {
+        return;
+      }
+      const content = String(template.content || '').trim();
+      if (content) {
+        parts.push(content);
+      }
+    });
+
+    return parts.join('\n');
+  }
+
   function loadPageData() {
     const pageData = storage.loadPageData(window.location.href);
     state.settings = {
@@ -118,10 +193,14 @@ function createPinFixApp() {
     state.annotations = (pageData.annotations || []).map((annotation) => hydrateAnnotation(annotation));
     state.masks = (pageData.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = pageData.globalNote || '';
+    state.selectedTemplateIds = getValidSelectedTemplateIds(pageData.selectedTemplateIds);
     state.activeAnnotationId = '';
     state.editingAnnotationId = '';
+    state.globalNoteView = 'note';
+    state.activeTemplateId = '';
+    state.draftTemplate = null;
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? pageData.pageSettings.globalNoteHeight
+      ? Math.max(pageData.pageSettings.globalNoteHeight, 360)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -178,6 +257,7 @@ function createPinFixApp() {
       annotations: state.annotations,
       masks: state.masks,
       globalNote: state.globalNote,
+      selectedTemplateIds: state.selectedTemplateIds,
       pageSettings: {
         colorPreset: state.settings.colorPreset,
         lineWidth: state.settings.lineWidth,
@@ -221,7 +301,8 @@ function createPinFixApp() {
     state.history.push({
       annotations: JSON.parse(JSON.stringify(state.annotations)),
       masks: JSON.parse(JSON.stringify(state.masks)),
-      globalNote: state.globalNote
+      globalNote: state.globalNote,
+      selectedTemplateIds: [...state.selectedTemplateIds]
     });
 
     if (state.history.length > 30) {
@@ -264,6 +345,17 @@ function createPinFixApp() {
   function clearCandidate() {
     state.candidate = null;
     state.candidateElement = null;
+  }
+
+  function hideAnnotationNotes() {
+    if (!state.activeAnnotationId && !state.editingAnnotationId) {
+      return;
+    }
+
+    state.activeAnnotationId = '';
+    state.editingAnnotationId = '';
+    savePageData();
+    render();
   }
 
   function markAnnotationFocused(id) {
@@ -477,6 +569,163 @@ function createPinFixApp() {
     savePageData();
   }
 
+  function toggleGlobalPanel(next) {
+    const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
+    state.globalNoteOpen = nextOpen;
+    if (nextOpen) {
+      state.globalNoteView = 'note';
+      state.activeTemplateId = '';
+      state.draftTemplate = null;
+    }
+    render();
+  }
+
+  function showGlobalNoteView() {
+    state.globalNoteView = 'note';
+    state.activeTemplateId = '';
+    state.draftTemplate = null;
+    render();
+  }
+
+  function showGlobalTemplate(id) {
+    const template = state.templates.find((item) => item.id === id);
+    if (!template) {
+      return;
+    }
+
+    state.globalNoteView = 'template';
+    state.activeTemplateId = id;
+    state.draftTemplate = {
+      title: template.title,
+      content: template.content
+    };
+    render();
+  }
+
+  function createGlobalTemplateDraft() {
+    state.globalNoteView = 'template';
+    state.activeTemplateId = '';
+    state.draftTemplate = {
+      title: '',
+      content: ''
+    };
+    render();
+  }
+
+  function updateGlobalTemplateDraft(field, value) {
+    if (!state.draftTemplate) {
+      state.draftTemplate = {
+        title: '',
+        content: ''
+      };
+    }
+
+    state.draftTemplate[field] = value;
+    clearPendingActionConfirm();
+  }
+
+  function commitGlobalTemplateDraft(shouldRender = true) {
+    if (!state.draftTemplate) {
+      return;
+    }
+
+    const draft = {
+      title: typeof state.draftTemplate.title === 'string' ? state.draftTemplate.title : '',
+      content: typeof state.draftTemplate.content === 'string' ? state.draftTemplate.content : ''
+    };
+
+    if (!state.activeTemplateId) {
+      if (!hasTemplateDraftContent(draft)) {
+        state.draftTemplate = null;
+        state.globalNoteView = 'note';
+        if (shouldRender) {
+          render();
+        }
+        return;
+      }
+
+      const now = Date.now();
+      const template = hydrateTemplate({
+        id: createId('template'),
+        title: draft.title,
+        content: draft.content,
+        createdAt: now,
+        updatedAt: now
+      });
+      state.templates.push(template);
+      state.activeTemplateId = template.id;
+      state.draftTemplate = {
+        title: template.title,
+        content: template.content
+      };
+      saveTemplates();
+      if (shouldRender) {
+        render();
+      }
+      return;
+    }
+
+    const template = state.templates.find((item) => item.id === state.activeTemplateId);
+    if (!template) {
+      state.draftTemplate = null;
+      state.globalNoteView = 'note';
+      state.activeTemplateId = '';
+      if (shouldRender) {
+        render();
+      }
+      return;
+    }
+
+    if (template.title === draft.title && template.content === draft.content) {
+      return;
+    }
+
+    template.title = draft.title;
+    template.content = draft.content;
+    template.updatedAt = Date.now();
+    saveTemplates();
+    if (shouldRender) {
+      render();
+    }
+  }
+
+  function deleteGlobalTemplate(id) {
+    const template = state.templates.find((item) => item.id === id);
+    if (!template) {
+      return;
+    }
+
+    if (!window.confirm(i18n.t(getLanguage(), 'templateDeleteConfirm'))) {
+      return;
+    }
+
+    state.templates = state.templates.filter((item) => item.id !== id);
+    state.selectedTemplateIds = state.selectedTemplateIds.filter((templateId) => templateId !== id);
+    state.activeTemplateId = '';
+    state.draftTemplate = null;
+    state.globalNoteView = 'note';
+    saveTemplates();
+    savePageData();
+    render();
+  }
+
+  function toggleGlobalTemplateSelection(id) {
+    if (!state.templates.some((template) => template.id === id)) {
+      return;
+    }
+
+    if (state.selectedTemplateIds.includes(id)) {
+      state.selectedTemplateIds = state.selectedTemplateIds.filter((templateId) => templateId !== id);
+    } else {
+      state.selectedTemplateIds = [...state.selectedTemplateIds, id];
+    }
+
+    state.selectedTemplateIds = getValidSelectedTemplateIds(state.selectedTemplateIds);
+    clearPendingActionConfirm();
+    savePageData();
+    render();
+  }
+
   function deleteAnnotation(id) {
     takeHistorySnapshot();
     state.annotations = state.annotations.filter((item) => item.id !== id);
@@ -510,6 +759,7 @@ function createPinFixApp() {
     state.annotations = [];
     state.masks = [];
     state.globalNote = '';
+    state.selectedTemplateIds = [];
     state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
@@ -544,6 +794,7 @@ function createPinFixApp() {
     state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
     state.globalNote = snapshot.globalNote;
+    state.selectedTemplateIds = getValidSelectedTemplateIds(snapshot.selectedTemplateIds);
     state.activeAnnotationId = '';
     state.editingAnnotationId = '';
     clearPendingActionConfirm();
@@ -578,6 +829,7 @@ function createPinFixApp() {
     state.open = nextOpen;
     state.activePopover = null;
     state.tool = state.settings.lastTool || 'select';
+    setSelectionActive(true);
 
     if (nextOpen && state.tool === 'select') {
       selector.enable();
@@ -596,6 +848,7 @@ function createPinFixApp() {
         state.captureHidden = false;
         state.countdownRemaining = 0;
         state.toast = '';
+        setSelectionActive(false);
         clearCandidate();
       }
     }
@@ -617,13 +870,21 @@ function createPinFixApp() {
       state.tool = 'select';
       state.settings.lastTool = 'select';
       state.activePopover = null;
-      selector.enable();
+      state.selectionMode = 'annotate';
+      setSelectionActive(selector.isEnabled() ? !state.selectionActive : true);
+      if (state.selectionActive) {
+        selector.enable();
+        selector.refresh();
+      } else {
+        setSelectionActive(false);
+      }
       saveGlobalSettings();
       render();
       return;
     }
 
     selector.disable();
+    setSelectionActive(false);
     state.tool = tool;
     state.settings.lastTool = tool;
     state.activePopover = state.activePopover === tool ? null : tool;
@@ -672,6 +933,7 @@ function createPinFixApp() {
 
   function setSelectionMode(mode) {
     state.selectionMode = mode;
+    setSelectionActive(true);
     state.tool = 'select';
     state.settings.lastTool = 'select';
     state.activePopover = null;
@@ -689,6 +951,7 @@ function createPinFixApp() {
   function togglePrivacyMode() {
     if (state.selectionMode === 'mask') {
       state.selectionMode = 'annotate';
+      setSelectionActive(true);
       render();
       showToast('privacyModeOff');
       return;
@@ -699,7 +962,8 @@ function createPinFixApp() {
   }
 
   async function copyNotes() {
-    if (!state.annotations.length && !String(state.globalNote || '').trim()) {
+    const businessNote = getCombinedBusinessNote();
+    if (!state.annotations.length && !businessNote) {
       showToast('nothingToCopy');
       return;
     }
@@ -714,7 +978,7 @@ function createPinFixApp() {
         language: getLanguage(),
         i18n,
         annotations: state.annotations,
-        globalNote: state.globalNote
+        businessNote
       });
       showToast('copiedNotes');
     } catch (error) {
@@ -944,11 +1208,17 @@ function createPinFixApp() {
       return;
     }
 
+    commitGlobalTemplateDraft(false);
     savePageData();
     lastUrl = nextUrl;
     loadPageData();
     clearPendingActionConfirm();
     render();
+  }
+
+  function handleBeforeUnload() {
+    commitGlobalTemplateDraft(false);
+    savePageData();
   }
 
   function attachRouteWatcher() {
@@ -980,7 +1250,7 @@ function createPinFixApp() {
 
     window.addEventListener('resize', scheduleRefreshAnnotations);
     window.addEventListener('scroll', scheduleRefreshAnnotations, { passive: true });
-    window.addEventListener('beforeunload', savePageData);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('keydown', handleWindowKeydown, true);
   }
 

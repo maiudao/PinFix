@@ -6,7 +6,12 @@ function createExporters(options) {
   }
 
   function buildMarkdown(context) {
-    const { language, i18n, annotations, globalNote } = context;
+    const {
+      language,
+      i18n,
+      annotations,
+      businessNote = context.globalNote
+    } = context;
     const lines = [];
 
     lines.push(`${i18n.t(language, 'pageTitle')}：${document.title}`);
@@ -23,7 +28,7 @@ function createExporters(options) {
     });
 
     lines.push(`${i18n.t(language, 'businessNote')}：`);
-    lines.push(globalNote ? globalNote.trim() : '-');
+    lines.push(businessNote ? businessNote.trim() : '-');
     lines.push('');
     lines.push(`${i18n.t(language, 'extraInfo')}：`);
     lines.push(`- ${i18n.t(language, 'viewportInfo')}：${window.innerWidth} x ${window.innerHeight}`);
