@@ -21,6 +21,7 @@ function createUI(options) {
   let sidecarCloseTimer = null;
   let latestState = null;
   let pendingTextSelection = null;
+  let pendingGlobalPanelScroll = null;
   let isResizingGlobalPanel = false;
   let liveGlobalPanelHeight = 0;
   const viewportMargin = 12;
@@ -146,7 +147,9 @@ function createUI(options) {
     if (!root.contains(event.target)) {
       closeAnnotationSidecar();
       hideTooltip();
-      options.onClosePopover();
+      if (latestState && latestState.activePopover) {
+        options.onClosePopover();
+      }
       return;
     }
 
@@ -300,6 +303,16 @@ function createUI(options) {
     return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
       ? target.dataset.templateField === 'title' || target.dataset.templateField === 'content'
       : false;
+  }
+
+  function isGlobalPanelTextEditingActive() {
+    const active = document.activeElement;
+    return Boolean(
+      globalPanel &&
+      active instanceof Element &&
+      globalPanel.contains(active) &&
+      (active.dataset.globalNote === 'true' || isGlobalTemplateField(active))
+    );
   }
 
   function handleInput(event) {
@@ -541,6 +554,7 @@ function createUI(options) {
   function render(state) {
     mount();
     captureTextSelection();
+    captureGlobalPanelScroll();
     latestState = state;
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
@@ -557,6 +571,7 @@ function createUI(options) {
     renderCountdown(state);
     positionTooltip();
     focusEditingNote(state);
+    restoreGlobalPanelScroll();
     restoreTextSelection();
   }
 
@@ -599,12 +614,12 @@ function createUI(options) {
 
   function captureTextSelection() {
     const active = document.activeElement;
-    if (!(active instanceof HTMLTextAreaElement)) {
+    if (!(active instanceof HTMLTextAreaElement) && !(active instanceof HTMLInputElement)) {
       pendingTextSelection = null;
       return;
     }
 
-    if (!active.dataset.noteId && active.dataset.globalNote !== 'true') {
+    if (!active.dataset.noteId && active.dataset.globalNote !== 'true' && !isGlobalTemplateField(active)) {
       pendingTextSelection = null;
       return;
     }
@@ -612,6 +627,7 @@ function createUI(options) {
     pendingTextSelection = {
       noteId: active.dataset.noteId || '',
       globalNote: active.dataset.globalNote === 'true',
+      templateField: active.dataset.templateField || '',
       start: active.selectionStart,
       end: active.selectionEnd,
       scrollTop: active.scrollTop
@@ -628,9 +644,11 @@ function createUI(options) {
     window.requestAnimationFrame(() => {
       const input = snapshot.globalNote
         ? root.querySelector('[data-global-note="true"]')
-        : Array.from(root.querySelectorAll('[data-note-id]')).find((node) => node.dataset.noteId === snapshot.noteId);
+        : snapshot.templateField
+          ? root.querySelector(`[data-template-field="${snapshot.templateField}"]`)
+          : Array.from(root.querySelectorAll('[data-note-id]')).find((node) => node.dataset.noteId === snapshot.noteId);
 
-      if (!(input instanceof HTMLTextAreaElement)) {
+      if (!(input instanceof HTMLTextAreaElement) && !(input instanceof HTMLInputElement)) {
         return;
       }
 
@@ -638,13 +656,47 @@ function createUI(options) {
       const end = clamp(snapshot.end, 0, input.value.length);
       input.focus();
       input.setSelectionRange(start, end);
-      input.scrollTop = snapshot.scrollTop;
-      autoGrow(input, snapshot.globalNote ? Number(input.dataset.maxHeight || 320) : 220);
+      if (input instanceof HTMLTextAreaElement) {
+        input.scrollTop = snapshot.scrollTop;
+        autoGrow(input, snapshot.globalNote || snapshot.templateField ? Number(input.dataset.maxHeight || 320) : 220);
+      }
+    });
+  }
+
+  function captureGlobalPanelScroll() {
+    const content = globalPanel ? globalPanel.querySelector('.pinfix-global-content') : null;
+    if (!content || globalPanel.classList.contains('pinfix-hidden')) {
+      pendingGlobalPanelScroll = null;
+      return;
+    }
+
+    pendingGlobalPanelScroll = {
+      key: globalPanel.dataset.renderKey || '',
+      top: content.scrollTop
+    };
+  }
+
+  function restoreGlobalPanelScroll() {
+    if (!pendingGlobalPanelScroll) {
+      return;
+    }
+
+    const snapshot = pendingGlobalPanelScroll;
+    pendingGlobalPanelScroll = null;
+    window.requestAnimationFrame(() => {
+      if (!globalPanel || globalPanel.dataset.renderKey !== snapshot.key) {
+        return;
+      }
+
+      const content = globalPanel.querySelector('.pinfix-global-content');
+      if (content) {
+        content.scrollTop = snapshot.top;
+      }
     });
   }
 
   function focusEditingNote(state) {
-    if (!state.editingAnnotationId) {
+    if (!state.editingAnnotationId || state.globalNoteOpen) {
       return;
     }
 
@@ -1283,7 +1335,6 @@ function createUI(options) {
       <div class="pinfix-global-template-options">
         ${state.templates.map((template) => {
           const selected = selectedIds.has(template.id);
-          const preview = summariseNote(template.content) || t('templatePreviewEmpty');
           return `
             <button
               type="button"
@@ -1292,10 +1343,7 @@ function createUI(options) {
               data-id="${template.id}"
             >
               <span class="pinfix-global-template-option-check">${selected ? '&#10003;' : ''}</span>
-              <span class="pinfix-global-template-option-body">
-                <span class="pinfix-global-template-option-name">${escapeHtml(getTemplateDisplayName(template))}</span>
-                <span class="pinfix-global-template-option-preview">${escapeHtml(preview)}</span>
-              </span>
+              <span class="pinfix-global-template-option-name">${escapeHtml(getTemplateDisplayName(template))}</span>
             </button>
           `;
         }).join('')}
@@ -1371,6 +1419,30 @@ function createUI(options) {
     const panelHeight = isResizingGlobalPanel && liveGlobalPanelHeight
       ? liveGlobalPanelHeight
       : state.globalNoteHeight;
+    const renderKey = state.globalNoteView === 'template'
+      ? `template:${state.activeTemplateId || 'draft'}`
+      : 'note';
+    const templateSignature = state.templates
+      .map((template) => `${template.id}:${template.title}`)
+      .join('|');
+    const selectedSignature = (state.selectedTemplateIds || []).join('|');
+    const nextUiKey = [
+      renderKey,
+      templateSignature,
+      selectedSignature,
+      state.pageTone,
+      state.templates.length,
+      state.globalNoteView === 'template' ? Boolean(state.activeTemplateId) : ''
+    ].join('::');
+    const canReuseEditingPanel = globalPanel.dataset.uiKey === nextUiKey && isGlobalPanelTextEditingActive();
+
+    globalPanel.style.height = `${panelHeight}px`;
+    globalPanel.dataset.renderKey = renderKey;
+    if (canReuseEditingPanel) {
+      updateGlobalPanelLiveValues(state);
+      bindGlobalResize(panelHeight);
+      return;
+    }
 
     globalPanel.innerHTML = `
       <div class="pinfix-global-head">
@@ -1385,7 +1457,7 @@ function createUI(options) {
       </div>
       <div class="pinfix-global-resize" data-role="resize-global"></div>
     `;
-    globalPanel.style.height = `${panelHeight}px`;
+    globalPanel.dataset.uiKey = nextUiKey;
 
     const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
     if (noteTextarea) {
@@ -1398,6 +1470,29 @@ function createUI(options) {
     }
 
     bindGlobalResize(panelHeight);
+  }
+
+  function updateGlobalPanelLiveValues(state) {
+    const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
+    if (noteTextarea instanceof HTMLTextAreaElement && document.activeElement !== noteTextarea) {
+      noteTextarea.value = state.globalNote || '';
+      autoGrow(noteTextarea, Number(noteTextarea.dataset.maxHeight || 320));
+    }
+
+    if (!state.draftTemplate) {
+      return;
+    }
+
+    const titleInput = globalPanel.querySelector('[data-template-field="title"]');
+    if (titleInput instanceof HTMLInputElement && document.activeElement !== titleInput) {
+      titleInput.value = state.draftTemplate.title || '';
+    }
+
+    const contentTextarea = globalPanel.querySelector('[data-template-field="content"]');
+    if (contentTextarea instanceof HTMLTextAreaElement && document.activeElement !== contentTextarea) {
+      contentTextarea.value = state.draftTemplate.content || '';
+      autoGrow(contentTextarea, Number(contentTextarea.dataset.maxHeight || 240));
+    }
   }
 
   function bindGlobalResize(panelHeight) {
@@ -1413,16 +1508,19 @@ function createUI(options) {
 
     let startY = 0;
     let startHeight = panelHeight;
+    const removeResizeMoveListeners = () => {
+      window.removeEventListener('pointermove', pointerMove, true);
+      window.removeEventListener('pointerup', pointerUp, true);
+    };
 
     const pointerMove = (event) => {
-      const nextHeight = clamp(startHeight - (event.clientY - startY), 360, 680);
+      const nextHeight = clamp(startHeight - (event.clientY - startY), 420, Math.min(760, window.innerHeight - 32));
       liveGlobalPanelHeight = nextHeight;
       globalPanel.style.height = `${nextHeight}px`;
     };
 
     const pointerUp = () => {
-      window.removeEventListener('pointermove', pointerMove, true);
-      window.removeEventListener('pointerup', pointerUp, true);
+      removeResizeMoveListeners();
       if (!isResizingGlobalPanel) {
         return;
       }
@@ -1434,7 +1532,7 @@ function createUI(options) {
       liveGlobalPanelHeight = 0;
     };
 
-    handle.addEventListener('pointerdown', (event) => {
+    const pointerDown = (event) => {
       event.preventDefault();
       isResizingGlobalPanel = true;
       startY = event.clientY;
@@ -1442,9 +1540,13 @@ function createUI(options) {
       liveGlobalPanelHeight = startHeight;
       window.addEventListener('pointermove', pointerMove, true);
       window.addEventListener('pointerup', pointerUp, true);
-    });
+    };
 
-    resizeCleanup = pointerUp;
+    handle.addEventListener('pointerdown', pointerDown);
+    resizeCleanup = () => {
+      handle.removeEventListener('pointerdown', pointerDown);
+      removeResizeMoveListeners();
+    };
   }
 
   function renderToast(state) {

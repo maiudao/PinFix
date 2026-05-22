@@ -766,7 +766,7 @@ function getPinFixStyles() {
   left: 50%;
   bottom: 12px;
   transform: translateX(-50%);
-  width: min(760px, calc(100vw - 32px));
+  width: min(820px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   border-radius: 18px;
   padding: 14px;
@@ -792,9 +792,13 @@ function getPinFixStyles() {
 .pinfix-global-template-scroll {
   flex: 1;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
 }
 
 .pinfix-global-template-chip,
@@ -817,6 +821,17 @@ function getPinFixStyles() {
   cursor: pointer;
   white-space: nowrap;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.pinfix-global-template-add {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .pinfix-global-template-chip.is-active,
@@ -863,19 +878,27 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-resize {
-  width: 88px;
-  height: 12px;
-  margin-top: auto;
+  width: 116px;
+  height: 16px;
+  margin: 0 auto -4px;
   align-self: center;
   cursor: ns-resize;
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(15, 118, 110, 0.14), rgba(15, 118, 110, 0.32)),
-    repeating-linear-gradient(
-      90deg,
-      rgba(15, 118, 110, 0.52) 0 8px,
-      transparent 8px 14px
-    );
+  position: relative;
+  touch-action: none;
+}
+
+.pinfix-global-resize::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 58px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.35);
+  box-shadow: 0 -5px 0 rgba(15, 118, 110, 0.16), 0 5px 0 rgba(15, 118, 110, 0.16);
 }
 
 .pinfix-global-input {
@@ -897,17 +920,21 @@ function getPinFixStyles() {
 
 .pinfix-global-template-options {
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .pinfix-global-template-option {
   width: 100%;
-  border-radius: 12px;
-  padding: 9px 12px;
+  min-width: 0;
+  min-height: 38px;
+  border-radius: 999px;
+  padding: 7px 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 7px;
   text-align: left;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
 }
@@ -918,13 +945,13 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-option-check {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.5);
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   flex: 0 0 auto;
 }
@@ -936,24 +963,28 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-option-name {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.pinfix-global-template-option-body {
-  flex: 1;
   min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.pinfix-global-template-option-preview {
   font-size: 12px;
-  line-height: 1.4;
-  color: #64748b;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 560px) {
+  .pinfix-global-template-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .pinfix-global-template-option {
+    min-height: 34px;
+    padding: 6px;
+  }
+
+  .pinfix-global-template-option-check {
+    display: none;
+  }
 }
 
 .pinfix-global-template-content {
@@ -966,9 +997,9 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-danger {
-  min-height: 34px;
+  min-height: 38px;
   border-radius: 999px;
-  padding: 0 12px;
+  padding: 0 14px;
   cursor: pointer;
   color: #b91c1c;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
@@ -984,8 +1015,7 @@ function getPinFixStyles() {
 
 .pinfix-global-panel.is-dark .pinfix-global-field-label,
 .pinfix-global-panel.is-dark .pinfix-global-empty,
-.pinfix-global-panel.is-dark .pinfix-global-helper,
-.pinfix-global-panel.is-dark .pinfix-global-template-option-preview {
+.pinfix-global-panel.is-dark .pinfix-global-helper {
   color: rgba(226, 232, 240, 0.82);
 }
 

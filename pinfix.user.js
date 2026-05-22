@@ -2206,7 +2206,7 @@ function getPinFixStyles() {
   left: 50%;
   bottom: 12px;
   transform: translateX(-50%);
-  width: min(760px, calc(100vw - 32px));
+  width: min(820px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   border-radius: 18px;
   padding: 14px;
@@ -2232,9 +2232,13 @@ function getPinFixStyles() {
 .pinfix-global-template-scroll {
   flex: 1;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
 }
 
 .pinfix-global-template-chip,
@@ -2257,6 +2261,17 @@ function getPinFixStyles() {
   cursor: pointer;
   white-space: nowrap;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.pinfix-global-template-add {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .pinfix-global-template-chip.is-active,
@@ -2303,19 +2318,27 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-resize {
-  width: 88px;
-  height: 12px;
-  margin-top: auto;
+  width: 116px;
+  height: 16px;
+  margin: 0 auto -4px;
   align-self: center;
   cursor: ns-resize;
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(15, 118, 110, 0.14), rgba(15, 118, 110, 0.32)),
-    repeating-linear-gradient(
-      90deg,
-      rgba(15, 118, 110, 0.52) 0 8px,
-      transparent 8px 14px
-    );
+  position: relative;
+  touch-action: none;
+}
+
+.pinfix-global-resize::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 58px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.35);
+  box-shadow: 0 -5px 0 rgba(15, 118, 110, 0.16), 0 5px 0 rgba(15, 118, 110, 0.16);
 }
 
 .pinfix-global-input {
@@ -2337,17 +2360,21 @@ function getPinFixStyles() {
 
 .pinfix-global-template-options {
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .pinfix-global-template-option {
   width: 100%;
-  border-radius: 12px;
-  padding: 9px 12px;
+  min-width: 0;
+  min-height: 38px;
+  border-radius: 999px;
+  padding: 7px 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 7px;
   text-align: left;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
 }
@@ -2358,13 +2385,13 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-option-check {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.5);
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   flex: 0 0 auto;
 }
@@ -2376,24 +2403,28 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-option-name {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.pinfix-global-template-option-body {
-  flex: 1;
   min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.pinfix-global-template-option-preview {
   font-size: 12px;
-  line-height: 1.4;
-  color: #64748b;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 560px) {
+  .pinfix-global-template-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .pinfix-global-template-option {
+    min-height: 34px;
+    padding: 6px;
+  }
+
+  .pinfix-global-template-option-check {
+    display: none;
+  }
 }
 
 .pinfix-global-template-content {
@@ -2406,9 +2437,9 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-danger {
-  min-height: 34px;
+  min-height: 38px;
   border-radius: 999px;
-  padding: 0 12px;
+  padding: 0 14px;
   cursor: pointer;
   color: #b91c1c;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
@@ -2424,8 +2455,7 @@ function getPinFixStyles() {
 
 .pinfix-global-panel.is-dark .pinfix-global-field-label,
 .pinfix-global-panel.is-dark .pinfix-global-empty,
-.pinfix-global-panel.is-dark .pinfix-global-helper,
-.pinfix-global-panel.is-dark .pinfix-global-template-option-preview {
+.pinfix-global-panel.is-dark .pinfix-global-helper {
   color: rgba(226, 232, 240, 0.82);
 }
 
@@ -2580,6 +2610,7 @@ function createUI(options) {
   let sidecarCloseTimer = null;
   let latestState = null;
   let pendingTextSelection = null;
+  let pendingGlobalPanelScroll = null;
   let isResizingGlobalPanel = false;
   let liveGlobalPanelHeight = 0;
   const viewportMargin = 12;
@@ -2705,7 +2736,9 @@ function createUI(options) {
     if (!root.contains(event.target)) {
       closeAnnotationSidecar();
       hideTooltip();
-      options.onClosePopover();
+      if (latestState && latestState.activePopover) {
+        options.onClosePopover();
+      }
       return;
     }
 
@@ -2859,6 +2892,16 @@ function createUI(options) {
     return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
       ? target.dataset.templateField === 'title' || target.dataset.templateField === 'content'
       : false;
+  }
+
+  function isGlobalPanelTextEditingActive() {
+    const active = document.activeElement;
+    return Boolean(
+      globalPanel &&
+      active instanceof Element &&
+      globalPanel.contains(active) &&
+      (active.dataset.globalNote === 'true' || isGlobalTemplateField(active))
+    );
   }
 
   function handleInput(event) {
@@ -3100,6 +3143,7 @@ function createUI(options) {
   function render(state) {
     mount();
     captureTextSelection();
+    captureGlobalPanelScroll();
     latestState = state;
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
@@ -3116,6 +3160,7 @@ function createUI(options) {
     renderCountdown(state);
     positionTooltip();
     focusEditingNote(state);
+    restoreGlobalPanelScroll();
     restoreTextSelection();
   }
 
@@ -3158,12 +3203,12 @@ function createUI(options) {
 
   function captureTextSelection() {
     const active = document.activeElement;
-    if (!(active instanceof HTMLTextAreaElement)) {
+    if (!(active instanceof HTMLTextAreaElement) && !(active instanceof HTMLInputElement)) {
       pendingTextSelection = null;
       return;
     }
 
-    if (!active.dataset.noteId && active.dataset.globalNote !== 'true') {
+    if (!active.dataset.noteId && active.dataset.globalNote !== 'true' && !isGlobalTemplateField(active)) {
       pendingTextSelection = null;
       return;
     }
@@ -3171,6 +3216,7 @@ function createUI(options) {
     pendingTextSelection = {
       noteId: active.dataset.noteId || '',
       globalNote: active.dataset.globalNote === 'true',
+      templateField: active.dataset.templateField || '',
       start: active.selectionStart,
       end: active.selectionEnd,
       scrollTop: active.scrollTop
@@ -3187,9 +3233,11 @@ function createUI(options) {
     window.requestAnimationFrame(() => {
       const input = snapshot.globalNote
         ? root.querySelector('[data-global-note="true"]')
-        : Array.from(root.querySelectorAll('[data-note-id]')).find((node) => node.dataset.noteId === snapshot.noteId);
+        : snapshot.templateField
+          ? root.querySelector(`[data-template-field="${snapshot.templateField}"]`)
+          : Array.from(root.querySelectorAll('[data-note-id]')).find((node) => node.dataset.noteId === snapshot.noteId);
 
-      if (!(input instanceof HTMLTextAreaElement)) {
+      if (!(input instanceof HTMLTextAreaElement) && !(input instanceof HTMLInputElement)) {
         return;
       }
 
@@ -3197,13 +3245,47 @@ function createUI(options) {
       const end = clamp(snapshot.end, 0, input.value.length);
       input.focus();
       input.setSelectionRange(start, end);
-      input.scrollTop = snapshot.scrollTop;
-      autoGrow(input, snapshot.globalNote ? Number(input.dataset.maxHeight || 320) : 220);
+      if (input instanceof HTMLTextAreaElement) {
+        input.scrollTop = snapshot.scrollTop;
+        autoGrow(input, snapshot.globalNote || snapshot.templateField ? Number(input.dataset.maxHeight || 320) : 220);
+      }
+    });
+  }
+
+  function captureGlobalPanelScroll() {
+    const content = globalPanel ? globalPanel.querySelector('.pinfix-global-content') : null;
+    if (!content || globalPanel.classList.contains('pinfix-hidden')) {
+      pendingGlobalPanelScroll = null;
+      return;
+    }
+
+    pendingGlobalPanelScroll = {
+      key: globalPanel.dataset.renderKey || '',
+      top: content.scrollTop
+    };
+  }
+
+  function restoreGlobalPanelScroll() {
+    if (!pendingGlobalPanelScroll) {
+      return;
+    }
+
+    const snapshot = pendingGlobalPanelScroll;
+    pendingGlobalPanelScroll = null;
+    window.requestAnimationFrame(() => {
+      if (!globalPanel || globalPanel.dataset.renderKey !== snapshot.key) {
+        return;
+      }
+
+      const content = globalPanel.querySelector('.pinfix-global-content');
+      if (content) {
+        content.scrollTop = snapshot.top;
+      }
     });
   }
 
   function focusEditingNote(state) {
-    if (!state.editingAnnotationId) {
+    if (!state.editingAnnotationId || state.globalNoteOpen) {
       return;
     }
 
@@ -3842,7 +3924,6 @@ function createUI(options) {
       <div class="pinfix-global-template-options">
         ${state.templates.map((template) => {
           const selected = selectedIds.has(template.id);
-          const preview = summariseNote(template.content) || t('templatePreviewEmpty');
           return `
             <button
               type="button"
@@ -3851,10 +3932,7 @@ function createUI(options) {
               data-id="${template.id}"
             >
               <span class="pinfix-global-template-option-check">${selected ? '&#10003;' : ''}</span>
-              <span class="pinfix-global-template-option-body">
-                <span class="pinfix-global-template-option-name">${escapeHtml(getTemplateDisplayName(template))}</span>
-                <span class="pinfix-global-template-option-preview">${escapeHtml(preview)}</span>
-              </span>
+              <span class="pinfix-global-template-option-name">${escapeHtml(getTemplateDisplayName(template))}</span>
             </button>
           `;
         }).join('')}
@@ -3930,6 +4008,30 @@ function createUI(options) {
     const panelHeight = isResizingGlobalPanel && liveGlobalPanelHeight
       ? liveGlobalPanelHeight
       : state.globalNoteHeight;
+    const renderKey = state.globalNoteView === 'template'
+      ? `template:${state.activeTemplateId || 'draft'}`
+      : 'note';
+    const templateSignature = state.templates
+      .map((template) => `${template.id}:${template.title}`)
+      .join('|');
+    const selectedSignature = (state.selectedTemplateIds || []).join('|');
+    const nextUiKey = [
+      renderKey,
+      templateSignature,
+      selectedSignature,
+      state.pageTone,
+      state.templates.length,
+      state.globalNoteView === 'template' ? Boolean(state.activeTemplateId) : ''
+    ].join('::');
+    const canReuseEditingPanel = globalPanel.dataset.uiKey === nextUiKey && isGlobalPanelTextEditingActive();
+
+    globalPanel.style.height = `${panelHeight}px`;
+    globalPanel.dataset.renderKey = renderKey;
+    if (canReuseEditingPanel) {
+      updateGlobalPanelLiveValues(state);
+      bindGlobalResize(panelHeight);
+      return;
+    }
 
     globalPanel.innerHTML = `
       <div class="pinfix-global-head">
@@ -3944,7 +4046,7 @@ function createUI(options) {
       </div>
       <div class="pinfix-global-resize" data-role="resize-global"></div>
     `;
-    globalPanel.style.height = `${panelHeight}px`;
+    globalPanel.dataset.uiKey = nextUiKey;
 
     const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
     if (noteTextarea) {
@@ -3957,6 +4059,29 @@ function createUI(options) {
     }
 
     bindGlobalResize(panelHeight);
+  }
+
+  function updateGlobalPanelLiveValues(state) {
+    const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
+    if (noteTextarea instanceof HTMLTextAreaElement && document.activeElement !== noteTextarea) {
+      noteTextarea.value = state.globalNote || '';
+      autoGrow(noteTextarea, Number(noteTextarea.dataset.maxHeight || 320));
+    }
+
+    if (!state.draftTemplate) {
+      return;
+    }
+
+    const titleInput = globalPanel.querySelector('[data-template-field="title"]');
+    if (titleInput instanceof HTMLInputElement && document.activeElement !== titleInput) {
+      titleInput.value = state.draftTemplate.title || '';
+    }
+
+    const contentTextarea = globalPanel.querySelector('[data-template-field="content"]');
+    if (contentTextarea instanceof HTMLTextAreaElement && document.activeElement !== contentTextarea) {
+      contentTextarea.value = state.draftTemplate.content || '';
+      autoGrow(contentTextarea, Number(contentTextarea.dataset.maxHeight || 240));
+    }
   }
 
   function bindGlobalResize(panelHeight) {
@@ -3972,16 +4097,19 @@ function createUI(options) {
 
     let startY = 0;
     let startHeight = panelHeight;
+    const removeResizeMoveListeners = () => {
+      window.removeEventListener('pointermove', pointerMove, true);
+      window.removeEventListener('pointerup', pointerUp, true);
+    };
 
     const pointerMove = (event) => {
-      const nextHeight = clamp(startHeight - (event.clientY - startY), 360, 680);
+      const nextHeight = clamp(startHeight - (event.clientY - startY), 420, Math.min(760, window.innerHeight - 32));
       liveGlobalPanelHeight = nextHeight;
       globalPanel.style.height = `${nextHeight}px`;
     };
 
     const pointerUp = () => {
-      window.removeEventListener('pointermove', pointerMove, true);
-      window.removeEventListener('pointerup', pointerUp, true);
+      removeResizeMoveListeners();
       if (!isResizingGlobalPanel) {
         return;
       }
@@ -3993,7 +4121,7 @@ function createUI(options) {
       liveGlobalPanelHeight = 0;
     };
 
-    handle.addEventListener('pointerdown', (event) => {
+    const pointerDown = (event) => {
       event.preventDefault();
       isResizingGlobalPanel = true;
       startY = event.clientY;
@@ -4001,9 +4129,13 @@ function createUI(options) {
       liveGlobalPanelHeight = startHeight;
       window.addEventListener('pointermove', pointerMove, true);
       window.addEventListener('pointerup', pointerUp, true);
-    });
+    };
 
-    resizeCleanup = pointerUp;
+    handle.addEventListener('pointerdown', pointerDown);
+    resizeCleanup = () => {
+      handle.removeEventListener('pointerdown', pointerDown);
+      removeResizeMoveListeners();
+    };
   }
 
   function renderToast(state) {
@@ -4275,7 +4407,7 @@ function createPinFixApp() {
     selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 380,
+    globalNoteHeight: 460,
     globalNoteView: 'note',
     activeTemplateId: '',
     draftTemplate: null,
@@ -4334,8 +4466,11 @@ function createPinFixApp() {
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     getSelectionMode: () => state.selectionMode,
-    isSelectionActive: () => state.selectionActive,
+    isSelectionActive: () => state.selectionActive && !state.globalNoteOpen,
     onCandidateChange: ({ element }) => {
+      if (state.globalNoteOpen) {
+        return;
+      }
       state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
       render();
@@ -4449,7 +4584,7 @@ function createPinFixApp() {
     state.activeTemplateId = '';
     state.draftTemplate = null;
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? Math.max(pageData.pageSettings.globalNoteHeight, 360)
+      ? Math.max(pageData.pageSettings.globalNoteHeight, 420)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -4565,7 +4700,11 @@ function createPinFixApp() {
     });
   }
 
-  function refreshAnnotations() {
+  function refreshAnnotations(force = false) {
+    if (state.globalNoteOpen && !force) {
+      return;
+    }
+
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
     state.annotations = state.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = state.masks.map((mask) => hydrateMask(mask));
@@ -4822,9 +4961,13 @@ function createPinFixApp() {
     const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
     state.globalNoteOpen = nextOpen;
     if (nextOpen) {
+      clearCandidate();
       state.globalNoteView = 'note';
       state.activeTemplateId = '';
       state.draftTemplate = null;
+    } else {
+      refreshAnnotations(true);
+      return;
     }
     render();
   }
@@ -5148,7 +5291,7 @@ function createPinFixApp() {
     savePageData();
 
     if (key === 'contrastMode') {
-      refreshAnnotations();
+      refreshAnnotations(true);
       return;
     }
 

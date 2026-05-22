@@ -26,7 +26,7 @@ function createPinFixApp() {
     selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 380,
+    globalNoteHeight: 460,
     globalNoteView: 'note',
     activeTemplateId: '',
     draftTemplate: null,
@@ -85,8 +85,11 @@ function createPinFixApp() {
   const selector = createSelectorManager({
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     getSelectionMode: () => state.selectionMode,
-    isSelectionActive: () => state.selectionActive,
+    isSelectionActive: () => state.selectionActive && !state.globalNoteOpen,
     onCandidateChange: ({ element }) => {
+      if (state.globalNoteOpen) {
+        return;
+      }
       state.candidateElement = element || null;
       state.candidate = element ? captureElementRect(element) : null;
       render();
@@ -200,7 +203,7 @@ function createPinFixApp() {
     state.activeTemplateId = '';
     state.draftTemplate = null;
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? Math.max(pageData.pageSettings.globalNoteHeight, 360)
+      ? Math.max(pageData.pageSettings.globalNoteHeight, 420)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -316,7 +319,11 @@ function createPinFixApp() {
     });
   }
 
-  function refreshAnnotations() {
+  function refreshAnnotations(force = false) {
+    if (state.globalNoteOpen && !force) {
+      return;
+    }
+
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
     state.annotations = state.annotations.map((annotation) => hydrateAnnotation(annotation));
     state.masks = state.masks.map((mask) => hydrateMask(mask));
@@ -573,9 +580,13 @@ function createPinFixApp() {
     const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
     state.globalNoteOpen = nextOpen;
     if (nextOpen) {
+      clearCandidate();
       state.globalNoteView = 'note';
       state.activeTemplateId = '';
       state.draftTemplate = null;
+    } else {
+      refreshAnnotations(true);
+      return;
     }
     render();
   }
@@ -899,7 +910,7 @@ function createPinFixApp() {
     savePageData();
 
     if (key === 'contrastMode') {
-      refreshAnnotations();
+      refreshAnnotations(true);
       return;
     }
 
