@@ -56,6 +56,8 @@ const PINFIX_BOX_PADDING_OPTIONS = {
 };
 
 const PINFIX_COUNTDOWN_OPTIONS = [3, 5, 10];
+const PINFIX_MIN_TOOL_TARGET_WIDTH = 132;
+const PINFIX_MIN_TOOL_TARGET_HEIGHT = 54;
 
 const PINFIX_DEFAULT_SETTINGS = {
   language: 'auto',
@@ -3184,30 +3186,41 @@ function createUI(options) {
     return rectsOverlap(paddedLeftRect, rightRect);
   }
 
+  function shouldShowToolRail(rect) {
+    if (!rect) {
+      return false;
+    }
+
+    return rect.width >= PINFIX_MIN_TOOL_TARGET_WIDTH && rect.height >= PINFIX_MIN_TOOL_TARGET_HEIGHT;
+  }
+
   function renderAnnotations(state) {
     const candidatePadding = PINFIX_BOX_PADDING_OPTIONS[state.settings.boxPadding] || 0;
     let candidateDisplayRect = null;
+    let candidateShowsTools = false;
     let activeRenderInfo = null;
-    candidate.innerHTML = `
-      <div class="pinfix-candidate-tools">
-        <button type="button" data-action="candidate-adjust" data-direction="-1" title="${escapeHtml(t('tipShrink'))}" aria-label="${escapeHtml(t('tipShrink'))}">${iconSvg('minus')}</button>
-        <button type="button" data-action="candidate-adjust" data-direction="1" title="${escapeHtml(t('tipExpand'))}" aria-label="${escapeHtml(t('tipExpand'))}">${iconSvg('plus')}</button>
-        <button type="button" data-action="candidate-pick" data-kind="annotate" title="${escapeHtml(t('tipSelectMode'))}" aria-label="${escapeHtml(t('tipSelectMode'))}">${iconSvg('edit')}</button>
-        <button type="button" data-action="candidate-pick" data-kind="mask" title="${escapeHtml(t('actionMaskArea'))}" aria-label="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
-      </div>
-    `;
+    candidate.innerHTML = '';
 
     const currentCandidate = state.candidate;
     if (!currentCandidate || !state.open || state.tool !== 'select' || state.captureHidden) {
       candidate.classList.add('pinfix-hidden');
     } else {
       const displayRect = clampBoxRect(expandRect(currentCandidate, candidatePadding));
+      candidateShowsTools = shouldShowToolRail(displayRect);
       candidate.classList.remove('pinfix-hidden');
       candidate.style.left = `${displayRect.pageLeft}px`;
       candidate.style.top = `${displayRect.pageTop}px`;
       candidate.style.width = `${Math.max(displayRect.width, 12)}px`;
       candidate.style.height = `${Math.max(displayRect.height, 12)}px`;
       candidateDisplayRect = displayRect;
+      candidate.innerHTML = candidateShowsTools ? `
+        <div class="pinfix-candidate-tools">
+          <button type="button" data-action="candidate-adjust" data-direction="-1" title="${escapeHtml(t('tipShrink'))}" aria-label="${escapeHtml(t('tipShrink'))}">${iconSvg('minus')}</button>
+          <button type="button" data-action="candidate-adjust" data-direction="1" title="${escapeHtml(t('tipExpand'))}" aria-label="${escapeHtml(t('tipExpand'))}">${iconSvg('plus')}</button>
+          <button type="button" data-action="candidate-pick" data-kind="annotate" title="${escapeHtml(t('tipSelectMode'))}" aria-label="${escapeHtml(t('tipSelectMode'))}">${iconSvg('edit')}</button>
+          <button type="button" data-action="candidate-pick" data-kind="mask" title="${escapeHtml(t('actionMaskArea'))}" aria-label="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
+        </div>
+      ` : '';
     }
 
     overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
@@ -3227,8 +3240,8 @@ function createUI(options) {
       }
     });
 
-    if (candidateDisplayRect) {
-      const pairedRenderInfo = activeRenderInfo && shouldShareToolRail(activeRenderInfo.frameRect, candidateDisplayRect)
+    if (candidateDisplayRect && candidateShowsTools) {
+      const pairedRenderInfo = activeRenderInfo && activeRenderInfo.showsTools && shouldShareToolRail(activeRenderInfo.frameRect, candidateDisplayRect)
         ? activeRenderInfo
         : null;
       positionCandidateTools(candidateDisplayRect, pairedRenderInfo);
@@ -3252,6 +3265,7 @@ function createUI(options) {
     }
     const frameRect = renderInfo.frameRect;
     const labelLayout = getLabelLayout(frameRect, labelSize);
+    const showsTools = shouldShowToolRail(frameRect);
 
     const box = document.createElement('div');
     box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${boxInteractive ? 'is-interactive' : ''}`;
@@ -3267,9 +3281,12 @@ function createUI(options) {
       : `0 0 0 1px ${stroke} inset, 0 10px 26px ${isActive ? `${color}3f` : `${color}24`}, 0 0 0 4px ${isActive ? `${color}18` : `${color}10`}`;
     overlayLayer.appendChild(box);
 
-    const shareCandidateRail = isActive && candidateDisplayRect && shouldShareToolRail(frameRect, candidateDisplayRect);
+    const shareCandidateRail = showsTools && isActive && candidateDisplayRect && shouldShareToolRail(frameRect, candidateDisplayRect);
     renderInfo.labelRect = labelLayout.rect;
-    renderAnnotationTools(annotation, renderInfo, labelLayout.rect, isActive, shareCandidateRail);
+    renderInfo.showsTools = showsTools;
+    if (showsTools) {
+      renderAnnotationTools(annotation, renderInfo, labelLayout.rect, isActive, shareCandidateRail);
+    }
 
     const label = document.createElement('div');
     const missingNote = !String(annotation.note || '').trim();
