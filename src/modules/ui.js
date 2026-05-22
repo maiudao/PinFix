@@ -11,7 +11,6 @@ function createUI(options) {
   let tooltip = null;
   let sidecar = null;
   let candidate = null;
-  let resizeCleanup = null;
   let toolClickTimer = null;
   let lastCaptureClickAt = 0;
   let lastQuickScreenshotAt = 0;
@@ -22,8 +21,6 @@ function createUI(options) {
   let latestState = null;
   let pendingTextSelection = null;
   let pendingGlobalPanelScroll = null;
-  let isResizingGlobalPanel = false;
-  let liveGlobalPanelHeight = 0;
   const viewportMargin = 12;
 
   function getLanguage() {
@@ -41,6 +38,7 @@ function createUI(options) {
       capture: '<rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M8 7l1.5-2h5L16 7"></path><circle cx="12" cy="13" r="3"></circle>',
       copy: '<rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path>',
       more: '<circle cx="6" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="18" cy="12" r="1.7"></circle>',
+      clear: '<path d="M7 7h10"></path><path d="M10 7V5h4v2"></path><path d="M9 10v7"></path><path d="M15 10v7"></path><path d="M6 7l1 13h10l1-13"></path>',
       edit: '<path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z"></path><path d="M13 7l4 4"></path>',
       mask: '<rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M8 18L18 8"></path><path d="M6 12l6-6"></path><path d="M12 18l6-6"></path>',
       minus: '<path d="M6 12h12"></path>',
@@ -126,10 +124,6 @@ function createUI(options) {
       return;
     }
 
-    if (resizeCleanup) {
-      resizeCleanup();
-      resizeCleanup = null;
-    }
     window.clearTimeout(toolClickTimer);
     cancelSidecarClose();
 
@@ -578,8 +572,6 @@ function createUI(options) {
   function renderClosedState() {
     closeAnnotationSidecar();
     hideTooltip();
-    isResizingGlobalPanel = false;
-    liveGlobalPanelHeight = 0;
     if (overlayLayer) {
       overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
     }
@@ -664,6 +656,11 @@ function createUI(options) {
   }
 
   function captureGlobalPanelScroll() {
+    if (isGlobalPanelTextEditingActive()) {
+      pendingGlobalPanelScroll = null;
+      return;
+    }
+
     const content = globalPanel ? globalPanel.querySelector('.pinfix-global-content') : null;
     if (!content || globalPanel.classList.contains('pinfix-hidden')) {
       pendingGlobalPanelScroll = null;
@@ -725,6 +722,7 @@ function createUI(options) {
       { tool: 'style', label: t('style'), icon: iconSvg('style') },
       { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
       { tool: 'copy', label: t('copy'), icon: iconSvg('copy') },
+      { action: 'run', name: 'clear-page', label: t('clearAllPageData'), icon: iconSvg('clear'), tone: 'danger' },
       { tool: 'more', label: t('more'), icon: iconSvg('more') }
     ];
 
@@ -746,6 +744,19 @@ function createUI(options) {
       >${iconSvg('close')}</button>
       ${buttons
       .map((button) => {
+        if (button.action === 'run') {
+          return `
+            <button
+              class="pinfix-tool-button pinfix-tool-danger"
+              type="button"
+              aria-label="${escapeHtml(button.label)}"
+              data-tooltip="${escapeHtml(button.label)}"
+              data-action="run"
+              data-name="${escapeHtml(button.name)}"
+            >${button.icon}</button>
+          `;
+        }
+
         const active = button.tool === 'select'
           ? state.tool === 'select' && state.selectionActive
           : button.tool === state.tool || button.tool === state.activePopover;
@@ -1355,7 +1366,17 @@ function createUI(options) {
     const draft = state.draftTemplate || { title: '', content: '' };
     return `
       <div class="pinfix-global-editor" data-template-editor="true">
-        <div class="pinfix-global-helper">${escapeHtml(t('templateAutoSaveHint'))}</div>
+        <div class="pinfix-global-editor-top">
+          <div class="pinfix-global-helper">${escapeHtml(t('templateAutoSaveHint'))}</div>
+          ${state.activeTemplateId ? `
+            <button
+              type="button"
+              class="pinfix-global-template-danger"
+              data-action="delete-global-template"
+              data-id="${state.activeTemplateId}"
+            >${escapeHtml(t('templateDelete'))}</button>
+          ` : ''}
+        </div>
         <div class="pinfix-global-field-label">${escapeHtml(t('templateTitleLabel'))}</div>
         <input
           class="pinfix-global-template-title"
@@ -1368,19 +1389,9 @@ function createUI(options) {
         <textarea
           class="pinfix-global-input pinfix-global-template-content"
           data-template-field="content"
-          data-max-height="${Math.max(280, window.innerHeight - 280)}"
+          data-max-height="6000"
           placeholder="${escapeHtml(t('templateContentPlaceholder'))}"
         >${escapeHtml(draft.content || '')}</textarea>
-        ${state.activeTemplateId ? `
-          <div class="pinfix-global-template-actions">
-            <button
-              type="button"
-              class="pinfix-global-template-danger"
-              data-action="delete-global-template"
-              data-id="${state.activeTemplateId}"
-            >${escapeHtml(t('templateDelete'))}</button>
-          </div>
-        ` : ''}
       </div>
     `;
   }
@@ -1392,7 +1403,7 @@ function createUI(options) {
         <textarea
           class="pinfix-global-input pinfix-global-note-input"
           data-global-note="true"
-          data-max-height="${Math.max(140, Math.floor(panelHeight * 0.34))}"
+          data-max-height="6000"
           placeholder="${escapeHtml(t('globalNotesHint'))}"
         >${escapeHtml(state.globalNote || '')}</textarea>
       </div>
@@ -1411,21 +1422,19 @@ function createUI(options) {
     globalPanel.classList.toggle('is-dark', state.pageTone === 'dark');
 
     if (!state.globalNoteOpen) {
-      isResizingGlobalPanel = false;
-      liveGlobalPanelHeight = 0;
       return;
     }
 
-    const panelHeight = isResizingGlobalPanel && liveGlobalPanelHeight
-      ? liveGlobalPanelHeight
-      : state.globalNoteHeight;
+    const panelHeight = state.globalNoteHeight;
     const renderKey = state.globalNoteView === 'template'
       ? `template:${state.activeTemplateId || 'draft'}`
       : 'note';
     const templateSignature = state.templates
-      .map((template) => `${template.id}:${template.title}`)
+      .map((template) => template.id)
       .join('|');
-    const selectedSignature = (state.selectedTemplateIds || []).join('|');
+    const selectedSignature = state.globalNoteView === 'note'
+      ? (state.selectedTemplateIds || []).join('|')
+      : '';
     const nextUiKey = [
       renderKey,
       templateSignature,
@@ -1440,7 +1449,6 @@ function createUI(options) {
     globalPanel.dataset.renderKey = renderKey;
     if (canReuseEditingPanel) {
       updateGlobalPanelLiveValues(state);
-      bindGlobalResize(panelHeight);
       return;
     }
 
@@ -1455,7 +1463,6 @@ function createUI(options) {
           ? renderGlobalTemplateEditor(state, panelHeight)
           : renderGlobalNoteBody(state, panelHeight)}
       </div>
-      <div class="pinfix-global-resize" data-role="resize-global"></div>
     `;
     globalPanel.dataset.uiKey = nextUiKey;
 
@@ -1468,8 +1475,6 @@ function createUI(options) {
     if (templateTextarea) {
       autoGrow(templateTextarea, Number(templateTextarea.dataset.maxHeight || 240));
     }
-
-    bindGlobalResize(panelHeight);
   }
 
   function updateGlobalPanelLiveValues(state) {
@@ -1493,60 +1498,6 @@ function createUI(options) {
       contentTextarea.value = state.draftTemplate.content || '';
       autoGrow(contentTextarea, Number(contentTextarea.dataset.maxHeight || 240));
     }
-  }
-
-  function bindGlobalResize(panelHeight) {
-    if (resizeCleanup) {
-      resizeCleanup();
-      resizeCleanup = null;
-    }
-
-    const handle = globalPanel.querySelector('[data-role="resize-global"]');
-    if (!handle) {
-      return;
-    }
-
-    let startY = 0;
-    let startHeight = panelHeight;
-    const removeResizeMoveListeners = () => {
-      window.removeEventListener('pointermove', pointerMove, true);
-      window.removeEventListener('pointerup', pointerUp, true);
-    };
-
-    const pointerMove = (event) => {
-      const nextHeight = clamp(startHeight - (event.clientY - startY), 420, Math.min(760, window.innerHeight - 32));
-      liveGlobalPanelHeight = nextHeight;
-      globalPanel.style.height = `${nextHeight}px`;
-    };
-
-    const pointerUp = () => {
-      removeResizeMoveListeners();
-      if (!isResizingGlobalPanel) {
-        return;
-      }
-
-      isResizingGlobalPanel = false;
-      if (liveGlobalPanelHeight) {
-        options.onResizeGlobalNote(liveGlobalPanelHeight);
-      }
-      liveGlobalPanelHeight = 0;
-    };
-
-    const pointerDown = (event) => {
-      event.preventDefault();
-      isResizingGlobalPanel = true;
-      startY = event.clientY;
-      startHeight = globalPanel.getBoundingClientRect().height;
-      liveGlobalPanelHeight = startHeight;
-      window.addEventListener('pointermove', pointerMove, true);
-      window.addEventListener('pointerup', pointerUp, true);
-    };
-
-    handle.addEventListener('pointerdown', pointerDown);
-    resizeCleanup = () => {
-      handle.removeEventListener('pointerdown', pointerDown);
-      removeResizeMoveListeners();
-    };
   }
 
   function renderToast(state) {
@@ -1725,12 +1676,6 @@ function createUI(options) {
         <button type="button" data-action="run" data-name="undo">${escapeHtml(t('undo'))}</button>
         <button type="button" data-action="run" data-name="toggle-notes">${escapeHtml(t(noteToggleKey))}</button>
       </div>
-      <div class="pinfix-divider"></div>
-      <div class="pinfix-section-title">${escapeHtml(t('dangerZone'))}</div>
-      <div class="pinfix-list pinfix-list-stack">
-        <button class="pinfix-danger-action" type="button" data-action="run" data-name="clear-page">${escapeHtml(t('clearAllPageData'))}</button>
-      </div>
-      <div class="pinfix-meta-copy pinfix-danger-hint">${escapeHtml(t('clearAllHint'))}</div>
       <div class="pinfix-divider"></div>
       <div class="pinfix-section-title">${escapeHtml(t('privacyMode'))}</div>
       <div class="pinfix-list">

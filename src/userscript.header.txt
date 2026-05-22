@@ -12,6 +12,8 @@
 // @include      http://[::1]:*/*
 // @include      https://[::1]:*/*
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @sandbox      DOM
 // @run-at       document-idle
 // @license      MIT

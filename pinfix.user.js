@@ -12,6 +12,8 @@
 // @include      http://[::1]:*/*
 // @include      https://[::1]:*/*
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @sandbox      DOM
 // @run-at       document-idle
 // @license      MIT
@@ -199,8 +201,6 @@ function createI18n() {
       clearMasks: '清空遮挡',
       notesOn: '显示备注',
       notesOff: '隐藏备注',
-      dangerZone: '危险操作',
-      clearAllHint: '会清空标注、修改要求、补充说明和隐私遮挡，可用撤销恢复。',
       language: '语言',
       hotkeys: '快捷键',
       expand: '展开',
@@ -226,7 +226,7 @@ function createI18n() {
       templatePreviewEmpty: '这个模板还没有填写正文内容。',
       templateDeleteConfirm: '确认删除这个模板吗？删除后当前页面勾选也会立即失效。',
       globalNoteMergeHint: '这里写页面级补充说明，复制时会和下方勾选模板一起带出。',
-      templateAutoSaveHint: '标题和内容失焦后自动保存，复制时只会带出模板正文。',
+      templateAutoSaveHint: '标题和内容会自动保存，复制时只会带出模板正文。',
       notePlaceholder: '写这里要怎么改，刷新后会自动恢复',
       noteMissingShort: '未填写说明',
       changeRequest: '修改要求',
@@ -342,8 +342,6 @@ function createI18n() {
       clearMasks: 'Clear masks',
       notesOn: 'Show notes',
       notesOff: 'Hide notes',
-      dangerZone: 'Danger zone',
-      clearAllHint: 'Clears annotations, change requests, more notes, and privacy masks. You can undo it.',
       language: 'Language',
       hotkeys: 'Hotkeys',
       expand: 'Expand',
@@ -369,7 +367,7 @@ function createI18n() {
       templatePreviewEmpty: 'This template does not have body content yet.',
       templateDeleteConfirm: 'Delete this template? It will also stop being selected on the current page.',
       globalNoteMergeHint: 'Write page-level context here. Copy will append the selected templates below.',
-      templateAutoSaveHint: 'Title and content save on blur. Only the template body is copied later.',
+      templateAutoSaveHint: 'Title and content save automatically. Only the template body is copied later.',
       notePlaceholder: 'Describe what should change here. PinFix saves it automatically.',
       noteMissingShort: 'Missing note',
       changeRequest: 'Change request',
@@ -502,7 +500,172 @@ function createStorage() {
   }
 
   function saveJson(key, value) {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function parseStoredJson(raw, fallback) {
+    if (!raw) {
+      return fallback;
+    }
+
+    if (typeof raw === 'object') {
+      return raw;
+    }
+
+    return JSON.parse(raw);
+  }
+
+  function hasScriptStorage() {
+    return typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+  }
+
+  function loadScriptJson(key, fallback) {
+    try {
+      if (!hasScriptStorage()) {
+        return loadJson(key, fallback);
+      }
+
+      const raw = GM_getValue(key, null);
+      return parseStoredJson(raw, fallback);
+    } catch (error) {
+      return fallback;
+    }
+  }
+
+  function saveScriptJson(key, value) {
+    const raw = JSON.stringify(value);
+    if (hasScriptStorage()) {
+      try {
+        GM_setValue(key, raw);
+        return { saved: true, scope: 'script' };
+      } catch (error) {
+        return { saved: saveJson(key, value), scope: 'local' };
+      }
+    }
+
+    return { saved: saveJson(key, value), scope: 'local' };
+  }
+
+  function loadLegacyTemplatePayload() {
+    const payload = loadJson(templateKey, null);
+    if (!payload || payload.version !== PINFIX_STORAGE_VERSION || !Array.isArray(payload.templates)) {
+      return null;
+    }
+
+    return payload;
+  }
+
+  function clearLegacyTemplates() {
+    if (hasScriptStorage()) {
+      try {
+        window.localStorage.removeItem(templateKey);
+      } catch (error) {
+        // Ignore cleanup failures. The shared script store remains authoritative.
+      }
+    }
+  }
+
+  function normaliseTemplates(templates) {
+    const result = [];
+    const existingIds = new Set();
+    let changed = false;
+    const now = Date.now();
+
+    (Array.isArray(templates) ? templates : []).forEach((template) => {
+      if (!template || typeof template !== 'object') {
+        changed = true;
+        return;
+      }
+
+      const title = typeof template.title === 'string' ? template.title : String(template.title || '');
+      const content = typeof template.content === 'string' ? template.content : String(template.content || '');
+      const createdAt = Number.isFinite(Number(template.createdAt)) ? Number(template.createdAt) : now;
+      const updatedAt = Number.isFinite(Number(template.updatedAt)) ? Number(template.updatedAt) : createdAt;
+      const templateId = template.id && !existingIds.has(template.id)
+        ? template.id
+        : createId('template');
+      if (
+        templateId !== template.id ||
+        title !== template.title ||
+        content !== template.content ||
+        createdAt !== template.createdAt ||
+        updatedAt !== template.updatedAt
+      ) {
+        changed = true;
+      }
+      result.push({
+        ...template,
+        id: templateId,
+        title,
+        content,
+        createdAt,
+        updatedAt
+      });
+      existingIds.add(templateId);
+    });
+
+    return { templates: result, changed };
+  }
+
+  function mergeTemplates(primaryTemplates, legacyTemplates) {
+    const normalised = normaliseTemplates(primaryTemplates);
+    const result = [...normalised.templates];
+    const existingIds = new Set(result.map((template) => template.id));
+    const existingById = new Map(result.map((template) => [template.id, template]));
+    let changed = normalised.changed;
+
+    (Array.isArray(legacyTemplates) ? legacyTemplates : []).forEach((template) => {
+      if (!template || typeof template !== 'object') {
+        return;
+      }
+
+      const title = typeof template.title === 'string' ? template.title : String(template.title || '');
+      const content = typeof template.content === 'string' ? template.content : String(template.content || '');
+      const createdAt = Number.isFinite(Number(template.createdAt)) ? Number(template.createdAt) : Date.now();
+      const updatedAt = Number.isFinite(Number(template.updatedAt)) ? Number(template.updatedAt) : createdAt;
+      const existingTemplate = template.id ? existingById.get(template.id) : null;
+      if (existingTemplate && existingTemplate.title === title && existingTemplate.content === content) {
+        return;
+      }
+
+      const templateId = template.id && !existingIds.has(template.id)
+        ? template.id
+        : createId('template');
+      result.push({
+        ...template,
+        id: templateId,
+        title,
+        content,
+        createdAt,
+        updatedAt
+      });
+      existingIds.add(templateId);
+      existingById.set(templateId, result[result.length - 1]);
+      changed = true;
+    });
+
+    return { templates: result, changed };
+  }
+
+  function shouldMergeLegacyTemplates(scriptPayload, legacyPayload) {
+    if (!hasScriptStorage() || !scriptPayload || !legacyPayload) {
+      return true;
+    }
+
+    const scriptSavedAt = Number(scriptPayload.savedAt || 0);
+    const legacySavedAt = Number(legacyPayload.savedAt || 0);
+    if (!scriptSavedAt) {
+      return true;
+    }
+    if (!legacySavedAt) {
+      return false;
+    }
+    return legacySavedAt > scriptSavedAt;
   }
 
   return {
@@ -526,19 +689,46 @@ function createStorage() {
       });
     },
     loadTemplates() {
-      const payload = loadJson(templateKey, null);
-      if (!payload || payload.version !== PINFIX_STORAGE_VERSION) {
-        return [];
+      const legacyPayload = loadLegacyTemplatePayload();
+      const legacyTemplates = legacyPayload ? legacyPayload.templates : [];
+      const payload = loadScriptJson(templateKey, null);
+      if (payload && payload.version === PINFIX_STORAGE_VERSION) {
+        const currentTemplates = Array.isArray(payload.templates) ? payload.templates : [];
+        if (!hasScriptStorage()) {
+          const normalised = normaliseTemplates(currentTemplates);
+          if (normalised.changed) {
+            this.saveTemplates(normalised.templates);
+          }
+          return normalised.templates;
+        }
+
+        const templatesToMerge = shouldMergeLegacyTemplates(payload, legacyPayload) ? legacyTemplates : [];
+        const merged = mergeTemplates(currentTemplates, templatesToMerge);
+        if (merged.changed) {
+          this.saveTemplates(merged.templates);
+        } else if (legacyPayload && hasScriptStorage()) {
+          clearLegacyTemplates();
+        }
+        return merged.templates;
       }
 
-      return Array.isArray(payload.templates) ? payload.templates : [];
+      if (legacyTemplates.length) {
+        const normalised = normaliseTemplates(legacyTemplates);
+        this.saveTemplates(normalised.templates);
+        return normalised.templates;
+      }
+      return [];
     },
     saveTemplates(templates) {
-      saveJson(templateKey, {
+      const result = saveScriptJson(templateKey, {
         version: PINFIX_STORAGE_VERSION,
         savedAt: Date.now(),
         templates: Array.isArray(templates) ? templates : []
       });
+      if (result.saved && result.scope === 'script') {
+        clearLegacyTemplates();
+      }
+      return result.saved;
     },
     loadPageData(urlValue) {
       const key = `${pageKeyPrefix}:${normaliseUrl(urlValue)}`;
@@ -1456,6 +1646,19 @@ function getPinFixStyles() {
   box-sizing: border-box;
 }
 
+#pinfix-root button,
+#pinfix-root input,
+#pinfix-root textarea {
+  font: inherit;
+}
+
+#pinfix-root button:focus-visible,
+#pinfix-root input:focus-visible,
+#pinfix-root textarea:focus-visible {
+  outline: 3px solid rgba(45, 212, 191, 0.46);
+  outline-offset: 2px;
+}
+
 .pinfix-chrome {
   position: fixed;
   left: 12px;
@@ -1615,6 +1818,16 @@ function getPinFixStyles() {
 .pinfix-tool-button:hover {
   transform: translateY(-1px);
   background: rgba(222, 247, 244, 0.96);
+}
+
+.pinfix-tool-danger {
+  color: #b91c1c;
+  border-color: rgba(225, 29, 46, 0.18);
+  background: rgba(255, 241, 242, 0.94);
+}
+
+.pinfix-tool-danger:hover {
+  background: rgba(254, 226, 226, 0.96);
 }
 
 .pinfix-tool-button.is-active {
@@ -2207,9 +2420,10 @@ function getPinFixStyles() {
   bottom: 12px;
   transform: translateX(-50%);
   width: min(820px, calc(100vw - 32px));
+  min-height: min(500px, calc(100vh - 32px));
   max-height: calc(100vh - 32px);
   border-radius: 18px;
-  padding: 14px;
+  padding: 16px 16px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2237,8 +2451,12 @@ function getPinFixStyles() {
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 2px 6px;
-  scrollbar-width: thin;
+  padding: 3px 2px 8px;
+  scrollbar-width: none;
+}
+
+.pinfix-global-template-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .pinfix-global-template-chip,
@@ -2253,7 +2471,7 @@ function getPinFixStyles() {
 .pinfix-global-template-chip,
 .pinfix-global-template-add {
   flex: 0 0 auto;
-  min-height: 34px;
+  min-height: 40px;
   border-radius: 999px;
   padding: 0 12px;
   font-size: 12px;
@@ -2264,9 +2482,9 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-add {
-  width: 38px;
-  min-width: 38px;
-  min-height: 38px;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -2284,30 +2502,51 @@ function getPinFixStyles() {
 .pinfix-global-content {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
   overflow-x: hidden;
-  padding-right: 2px;
+  padding: 2px 2px 0;
+  overscroll-behavior: contain;
 }
 
 .pinfix-global-note-body,
-.pinfix-global-picker,
 .pinfix-global-editor {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+.pinfix-global-note-body,
+.pinfix-global-editor {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  overscroll-behavior: contain;
+}
+
+.pinfix-global-editor-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .pinfix-global-helper {
   font-size: 12px;
   line-height: 1.5;
   color: #64748b;
+  flex: 1;
 }
 
 .pinfix-global-picker {
-  margin-top: 4px;
-  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
 
@@ -2317,36 +2556,13 @@ function getPinFixStyles() {
   color: #64748b;
 }
 
-.pinfix-global-resize {
-  width: 116px;
-  height: 16px;
-  margin: 0 auto -4px;
-  align-self: center;
-  cursor: ns-resize;
-  border-radius: 999px;
-  position: relative;
-  touch-action: none;
-}
-
-.pinfix-global-resize::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 58px;
-  height: 4px;
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.35);
-  box-shadow: 0 -5px 0 rgba(15, 118, 110, 0.16), 0 5px 0 rgba(15, 118, 110, 0.16);
-}
-
 .pinfix-global-input {
   min-height: 160px;
 }
 
 .pinfix-global-note-input {
-  min-height: 124px;
+  flex: 1;
+  min-height: 180px;
 }
 
 .pinfix-global-template-title {
@@ -2362,12 +2578,17 @@ function getPinFixStyles() {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  max-height: 92px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  overscroll-behavior: contain;
 }
 
 .pinfix-global-template-option {
   width: 100%;
   min-width: 0;
-  min-height: 38px;
+  min-height: 42px;
   border-radius: 999px;
   padding: 7px 10px;
   cursor: pointer;
@@ -2418,7 +2639,7 @@ function getPinFixStyles() {
   }
 
   .pinfix-global-template-option {
-    min-height: 34px;
+    min-height: 40px;
     padding: 6px;
   }
 
@@ -2428,20 +2649,16 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-content {
-  min-height: 220px;
-}
-
-.pinfix-global-template-actions {
-  display: flex;
-  justify-content: flex-end;
+  min-height: 300px;
 }
 
 .pinfix-global-template-danger {
-  min-height: 38px;
+  min-height: 40px;
   border-radius: 999px;
   padding: 0 14px;
   cursor: pointer;
   color: #b91c1c;
+  white-space: nowrap;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
 }
 
@@ -2600,7 +2817,6 @@ function createUI(options) {
   let tooltip = null;
   let sidecar = null;
   let candidate = null;
-  let resizeCleanup = null;
   let toolClickTimer = null;
   let lastCaptureClickAt = 0;
   let lastQuickScreenshotAt = 0;
@@ -2611,8 +2827,6 @@ function createUI(options) {
   let latestState = null;
   let pendingTextSelection = null;
   let pendingGlobalPanelScroll = null;
-  let isResizingGlobalPanel = false;
-  let liveGlobalPanelHeight = 0;
   const viewportMargin = 12;
 
   function getLanguage() {
@@ -2630,6 +2844,7 @@ function createUI(options) {
       capture: '<rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M8 7l1.5-2h5L16 7"></path><circle cx="12" cy="13" r="3"></circle>',
       copy: '<rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path>',
       more: '<circle cx="6" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="18" cy="12" r="1.7"></circle>',
+      clear: '<path d="M7 7h10"></path><path d="M10 7V5h4v2"></path><path d="M9 10v7"></path><path d="M15 10v7"></path><path d="M6 7l1 13h10l1-13"></path>',
       edit: '<path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z"></path><path d="M13 7l4 4"></path>',
       mask: '<rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M8 18L18 8"></path><path d="M6 12l6-6"></path><path d="M12 18l6-6"></path>',
       minus: '<path d="M6 12h12"></path>',
@@ -2715,10 +2930,6 @@ function createUI(options) {
       return;
     }
 
-    if (resizeCleanup) {
-      resizeCleanup();
-      resizeCleanup = null;
-    }
     window.clearTimeout(toolClickTimer);
     cancelSidecarClose();
 
@@ -3167,8 +3378,6 @@ function createUI(options) {
   function renderClosedState() {
     closeAnnotationSidecar();
     hideTooltip();
-    isResizingGlobalPanel = false;
-    liveGlobalPanelHeight = 0;
     if (overlayLayer) {
       overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
     }
@@ -3253,6 +3462,11 @@ function createUI(options) {
   }
 
   function captureGlobalPanelScroll() {
+    if (isGlobalPanelTextEditingActive()) {
+      pendingGlobalPanelScroll = null;
+      return;
+    }
+
     const content = globalPanel ? globalPanel.querySelector('.pinfix-global-content') : null;
     if (!content || globalPanel.classList.contains('pinfix-hidden')) {
       pendingGlobalPanelScroll = null;
@@ -3314,6 +3528,7 @@ function createUI(options) {
       { tool: 'style', label: t('style'), icon: iconSvg('style') },
       { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
       { tool: 'copy', label: t('copy'), icon: iconSvg('copy') },
+      { action: 'run', name: 'clear-page', label: t('clearAllPageData'), icon: iconSvg('clear'), tone: 'danger' },
       { tool: 'more', label: t('more'), icon: iconSvg('more') }
     ];
 
@@ -3335,6 +3550,19 @@ function createUI(options) {
       >${iconSvg('close')}</button>
       ${buttons
       .map((button) => {
+        if (button.action === 'run') {
+          return `
+            <button
+              class="pinfix-tool-button pinfix-tool-danger"
+              type="button"
+              aria-label="${escapeHtml(button.label)}"
+              data-tooltip="${escapeHtml(button.label)}"
+              data-action="run"
+              data-name="${escapeHtml(button.name)}"
+            >${button.icon}</button>
+          `;
+        }
+
         const active = button.tool === 'select'
           ? state.tool === 'select' && state.selectionActive
           : button.tool === state.tool || button.tool === state.activePopover;
@@ -3944,7 +4172,17 @@ function createUI(options) {
     const draft = state.draftTemplate || { title: '', content: '' };
     return `
       <div class="pinfix-global-editor" data-template-editor="true">
-        <div class="pinfix-global-helper">${escapeHtml(t('templateAutoSaveHint'))}</div>
+        <div class="pinfix-global-editor-top">
+          <div class="pinfix-global-helper">${escapeHtml(t('templateAutoSaveHint'))}</div>
+          ${state.activeTemplateId ? `
+            <button
+              type="button"
+              class="pinfix-global-template-danger"
+              data-action="delete-global-template"
+              data-id="${state.activeTemplateId}"
+            >${escapeHtml(t('templateDelete'))}</button>
+          ` : ''}
+        </div>
         <div class="pinfix-global-field-label">${escapeHtml(t('templateTitleLabel'))}</div>
         <input
           class="pinfix-global-template-title"
@@ -3957,19 +4195,9 @@ function createUI(options) {
         <textarea
           class="pinfix-global-input pinfix-global-template-content"
           data-template-field="content"
-          data-max-height="${Math.max(280, window.innerHeight - 280)}"
+          data-max-height="6000"
           placeholder="${escapeHtml(t('templateContentPlaceholder'))}"
         >${escapeHtml(draft.content || '')}</textarea>
-        ${state.activeTemplateId ? `
-          <div class="pinfix-global-template-actions">
-            <button
-              type="button"
-              class="pinfix-global-template-danger"
-              data-action="delete-global-template"
-              data-id="${state.activeTemplateId}"
-            >${escapeHtml(t('templateDelete'))}</button>
-          </div>
-        ` : ''}
       </div>
     `;
   }
@@ -3981,7 +4209,7 @@ function createUI(options) {
         <textarea
           class="pinfix-global-input pinfix-global-note-input"
           data-global-note="true"
-          data-max-height="${Math.max(140, Math.floor(panelHeight * 0.34))}"
+          data-max-height="6000"
           placeholder="${escapeHtml(t('globalNotesHint'))}"
         >${escapeHtml(state.globalNote || '')}</textarea>
       </div>
@@ -4000,21 +4228,19 @@ function createUI(options) {
     globalPanel.classList.toggle('is-dark', state.pageTone === 'dark');
 
     if (!state.globalNoteOpen) {
-      isResizingGlobalPanel = false;
-      liveGlobalPanelHeight = 0;
       return;
     }
 
-    const panelHeight = isResizingGlobalPanel && liveGlobalPanelHeight
-      ? liveGlobalPanelHeight
-      : state.globalNoteHeight;
+    const panelHeight = state.globalNoteHeight;
     const renderKey = state.globalNoteView === 'template'
       ? `template:${state.activeTemplateId || 'draft'}`
       : 'note';
     const templateSignature = state.templates
-      .map((template) => `${template.id}:${template.title}`)
+      .map((template) => template.id)
       .join('|');
-    const selectedSignature = (state.selectedTemplateIds || []).join('|');
+    const selectedSignature = state.globalNoteView === 'note'
+      ? (state.selectedTemplateIds || []).join('|')
+      : '';
     const nextUiKey = [
       renderKey,
       templateSignature,
@@ -4029,7 +4255,6 @@ function createUI(options) {
     globalPanel.dataset.renderKey = renderKey;
     if (canReuseEditingPanel) {
       updateGlobalPanelLiveValues(state);
-      bindGlobalResize(panelHeight);
       return;
     }
 
@@ -4044,7 +4269,6 @@ function createUI(options) {
           ? renderGlobalTemplateEditor(state, panelHeight)
           : renderGlobalNoteBody(state, panelHeight)}
       </div>
-      <div class="pinfix-global-resize" data-role="resize-global"></div>
     `;
     globalPanel.dataset.uiKey = nextUiKey;
 
@@ -4057,8 +4281,6 @@ function createUI(options) {
     if (templateTextarea) {
       autoGrow(templateTextarea, Number(templateTextarea.dataset.maxHeight || 240));
     }
-
-    bindGlobalResize(panelHeight);
   }
 
   function updateGlobalPanelLiveValues(state) {
@@ -4082,60 +4304,6 @@ function createUI(options) {
       contentTextarea.value = state.draftTemplate.content || '';
       autoGrow(contentTextarea, Number(contentTextarea.dataset.maxHeight || 240));
     }
-  }
-
-  function bindGlobalResize(panelHeight) {
-    if (resizeCleanup) {
-      resizeCleanup();
-      resizeCleanup = null;
-    }
-
-    const handle = globalPanel.querySelector('[data-role="resize-global"]');
-    if (!handle) {
-      return;
-    }
-
-    let startY = 0;
-    let startHeight = panelHeight;
-    const removeResizeMoveListeners = () => {
-      window.removeEventListener('pointermove', pointerMove, true);
-      window.removeEventListener('pointerup', pointerUp, true);
-    };
-
-    const pointerMove = (event) => {
-      const nextHeight = clamp(startHeight - (event.clientY - startY), 420, Math.min(760, window.innerHeight - 32));
-      liveGlobalPanelHeight = nextHeight;
-      globalPanel.style.height = `${nextHeight}px`;
-    };
-
-    const pointerUp = () => {
-      removeResizeMoveListeners();
-      if (!isResizingGlobalPanel) {
-        return;
-      }
-
-      isResizingGlobalPanel = false;
-      if (liveGlobalPanelHeight) {
-        options.onResizeGlobalNote(liveGlobalPanelHeight);
-      }
-      liveGlobalPanelHeight = 0;
-    };
-
-    const pointerDown = (event) => {
-      event.preventDefault();
-      isResizingGlobalPanel = true;
-      startY = event.clientY;
-      startHeight = globalPanel.getBoundingClientRect().height;
-      liveGlobalPanelHeight = startHeight;
-      window.addEventListener('pointermove', pointerMove, true);
-      window.addEventListener('pointerup', pointerUp, true);
-    };
-
-    handle.addEventListener('pointerdown', pointerDown);
-    resizeCleanup = () => {
-      handle.removeEventListener('pointerdown', pointerDown);
-      removeResizeMoveListeners();
-    };
   }
 
   function renderToast(state) {
@@ -4315,12 +4483,6 @@ function createUI(options) {
         <button type="button" data-action="run" data-name="toggle-notes">${escapeHtml(t(noteToggleKey))}</button>
       </div>
       <div class="pinfix-divider"></div>
-      <div class="pinfix-section-title">${escapeHtml(t('dangerZone'))}</div>
-      <div class="pinfix-list pinfix-list-stack">
-        <button class="pinfix-danger-action" type="button" data-action="run" data-name="clear-page">${escapeHtml(t('clearAllPageData'))}</button>
-      </div>
-      <div class="pinfix-meta-copy pinfix-danger-hint">${escapeHtml(t('clearAllHint'))}</div>
-      <div class="pinfix-divider"></div>
       <div class="pinfix-section-title">${escapeHtml(t('privacyMode'))}</div>
       <div class="pinfix-list">
         <button type="button" data-action="run" data-name="toggle-mask-mode">${escapeHtml(t(maskButtonKey))}</button>
@@ -4407,7 +4569,7 @@ function createPinFixApp() {
     selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 460,
+    globalNoteHeight: 560,
     globalNoteView: 'note',
     activeTemplateId: '',
     draftTemplate: null,
@@ -4525,7 +4687,36 @@ function createPinFixApp() {
   }
 
   function saveTemplates() {
-    storage.saveTemplates(state.templates);
+    return storage.saveTemplates(state.templates);
+  }
+
+  function getTemplateSignature(templates) {
+    return (Array.isArray(templates) ? templates : [])
+      .map((template) => {
+        return [
+          template.id,
+          template.title,
+          template.content,
+          template.createdAt,
+          template.updatedAt
+        ].join('\u0001');
+      })
+      .join('\u0002');
+  }
+
+  function refreshTemplatesFromStorage() {
+    const nextTemplates = storage.loadTemplates().map((template) => hydrateTemplate(template));
+    if (getTemplateSignature(nextTemplates) === getTemplateSignature(state.templates)) {
+      return;
+    }
+
+    state.templates = nextTemplates;
+    state.selectedTemplateIds = getValidSelectedTemplateIds(state.selectedTemplateIds);
+    if (state.activeTemplateId && !state.templates.some((template) => template.id === state.activeTemplateId)) {
+      state.globalNoteView = 'note';
+      state.activeTemplateId = '';
+      state.draftTemplate = null;
+    }
   }
 
   function hasTemplateDraftContent(template) {
@@ -4569,6 +4760,7 @@ function createPinFixApp() {
   }
 
   function loadPageData() {
+    refreshTemplatesFromStorage();
     const pageData = storage.loadPageData(window.location.href);
     state.settings = {
       ...state.settings,
@@ -4584,7 +4776,7 @@ function createPinFixApp() {
     state.activeTemplateId = '';
     state.draftTemplate = null;
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? Math.max(pageData.pageSettings.globalNoteHeight, 420)
+      ? Math.max(pageData.pageSettings.globalNoteHeight, 500)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -4959,6 +5151,11 @@ function createPinFixApp() {
 
   function toggleGlobalPanel(next) {
     const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
+    if (!nextOpen) {
+      commitGlobalTemplateDraft(false);
+    } else {
+      refreshTemplatesFromStorage();
+    }
     state.globalNoteOpen = nextOpen;
     if (nextOpen) {
       clearCandidate();
@@ -4973,6 +5170,7 @@ function createPinFixApp() {
   }
 
   function showGlobalNoteView() {
+    commitGlobalTemplateDraft(false);
     state.globalNoteView = 'note';
     state.activeTemplateId = '';
     state.draftTemplate = null;
@@ -4980,6 +5178,7 @@ function createPinFixApp() {
   }
 
   function showGlobalTemplate(id) {
+    commitGlobalTemplateDraft(false);
     const template = state.templates.find((item) => item.id === id);
     if (!template) {
       return;
@@ -4995,6 +5194,7 @@ function createPinFixApp() {
   }
 
   function createGlobalTemplateDraft() {
+    commitGlobalTemplateDraft(false);
     state.globalNoteView = 'template';
     state.activeTemplateId = '';
     state.draftTemplate = {
@@ -5005,6 +5205,10 @@ function createPinFixApp() {
   }
 
   function updateGlobalTemplateDraft(field, value) {
+    if (field !== 'title' && field !== 'content') {
+      return;
+    }
+
     if (!state.draftTemplate) {
       state.draftTemplate = {
         title: '',
@@ -5082,6 +5286,10 @@ function createPinFixApp() {
   }
 
   function deleteGlobalTemplate(id) {
+    if (id === state.activeTemplateId) {
+      commitGlobalTemplateDraft(false);
+    }
+
     const template = state.templates.find((item) => item.id === id);
     if (!template) {
       return;
@@ -5216,6 +5424,7 @@ function createPinFixApp() {
   function toggleOpen(forceValue) {
     const nextOpen = typeof forceValue === 'boolean' ? forceValue : !state.open;
     if (!nextOpen) {
+      commitGlobalTemplateDraft(false);
       savePageData();
     }
     state.open = nextOpen;
@@ -5354,6 +5563,8 @@ function createPinFixApp() {
   }
 
   async function copyNotes() {
+    commitGlobalTemplateDraft(false);
+    refreshTemplatesFromStorage();
     const businessNote = getCombinedBusinessNote();
     if (!state.annotations.length && !businessNote) {
       showToast('nothingToCopy');

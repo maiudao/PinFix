@@ -16,6 +16,19 @@ function getPinFixStyles() {
   box-sizing: border-box;
 }
 
+#pinfix-root button,
+#pinfix-root input,
+#pinfix-root textarea {
+  font: inherit;
+}
+
+#pinfix-root button:focus-visible,
+#pinfix-root input:focus-visible,
+#pinfix-root textarea:focus-visible {
+  outline: 3px solid rgba(45, 212, 191, 0.46);
+  outline-offset: 2px;
+}
+
 .pinfix-chrome {
   position: fixed;
   left: 12px;
@@ -175,6 +188,16 @@ function getPinFixStyles() {
 .pinfix-tool-button:hover {
   transform: translateY(-1px);
   background: rgba(222, 247, 244, 0.96);
+}
+
+.pinfix-tool-danger {
+  color: #b91c1c;
+  border-color: rgba(225, 29, 46, 0.18);
+  background: rgba(255, 241, 242, 0.94);
+}
+
+.pinfix-tool-danger:hover {
+  background: rgba(254, 226, 226, 0.96);
 }
 
 .pinfix-tool-button.is-active {
@@ -767,9 +790,10 @@ function getPinFixStyles() {
   bottom: 12px;
   transform: translateX(-50%);
   width: min(820px, calc(100vw - 32px));
+  min-height: min(500px, calc(100vh - 32px));
   max-height: calc(100vh - 32px);
   border-radius: 18px;
-  padding: 14px;
+  padding: 16px 16px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -797,8 +821,12 @@ function getPinFixStyles() {
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 2px 6px;
-  scrollbar-width: thin;
+  padding: 3px 2px 8px;
+  scrollbar-width: none;
+}
+
+.pinfix-global-template-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .pinfix-global-template-chip,
@@ -813,7 +841,7 @@ function getPinFixStyles() {
 .pinfix-global-template-chip,
 .pinfix-global-template-add {
   flex: 0 0 auto;
-  min-height: 34px;
+  min-height: 40px;
   border-radius: 999px;
   padding: 0 12px;
   font-size: 12px;
@@ -824,9 +852,9 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-add {
-  width: 38px;
-  min-width: 38px;
-  min-height: 38px;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -844,30 +872,51 @@ function getPinFixStyles() {
 .pinfix-global-content {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
   overflow-x: hidden;
-  padding-right: 2px;
+  padding: 2px 2px 0;
+  overscroll-behavior: contain;
 }
 
 .pinfix-global-note-body,
-.pinfix-global-picker,
 .pinfix-global-editor {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+.pinfix-global-note-body,
+.pinfix-global-editor {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  overscroll-behavior: contain;
+}
+
+.pinfix-global-editor-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .pinfix-global-helper {
   font-size: 12px;
   line-height: 1.5;
   color: #64748b;
+  flex: 1;
 }
 
 .pinfix-global-picker {
-  margin-top: 4px;
-  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
 
@@ -877,36 +926,13 @@ function getPinFixStyles() {
   color: #64748b;
 }
 
-.pinfix-global-resize {
-  width: 116px;
-  height: 16px;
-  margin: 0 auto -4px;
-  align-self: center;
-  cursor: ns-resize;
-  border-radius: 999px;
-  position: relative;
-  touch-action: none;
-}
-
-.pinfix-global-resize::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 58px;
-  height: 4px;
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.35);
-  box-shadow: 0 -5px 0 rgba(15, 118, 110, 0.16), 0 5px 0 rgba(15, 118, 110, 0.16);
-}
-
 .pinfix-global-input {
   min-height: 160px;
 }
 
 .pinfix-global-note-input {
-  min-height: 124px;
+  flex: 1;
+  min-height: 180px;
 }
 
 .pinfix-global-template-title {
@@ -922,12 +948,17 @@ function getPinFixStyles() {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  max-height: 92px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  overscroll-behavior: contain;
 }
 
 .pinfix-global-template-option {
   width: 100%;
   min-width: 0;
-  min-height: 38px;
+  min-height: 42px;
   border-radius: 999px;
   padding: 7px 10px;
   cursor: pointer;
@@ -978,7 +1009,7 @@ function getPinFixStyles() {
   }
 
   .pinfix-global-template-option {
-    min-height: 34px;
+    min-height: 40px;
     padding: 6px;
   }
 
@@ -988,20 +1019,16 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-content {
-  min-height: 220px;
-}
-
-.pinfix-global-template-actions {
-  display: flex;
-  justify-content: flex-end;
+  min-height: 300px;
 }
 
 .pinfix-global-template-danger {
-  min-height: 38px;
+  min-height: 40px;
   border-radius: 999px;
   padding: 0 14px;
   cursor: pointer;
   color: #b91c1c;
+  white-space: nowrap;
   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
 }
 

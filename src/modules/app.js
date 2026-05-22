@@ -26,7 +26,7 @@ function createPinFixApp() {
     selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 460,
+    globalNoteHeight: 560,
     globalNoteView: 'note',
     activeTemplateId: '',
     draftTemplate: null,
@@ -144,7 +144,36 @@ function createPinFixApp() {
   }
 
   function saveTemplates() {
-    storage.saveTemplates(state.templates);
+    return storage.saveTemplates(state.templates);
+  }
+
+  function getTemplateSignature(templates) {
+    return (Array.isArray(templates) ? templates : [])
+      .map((template) => {
+        return [
+          template.id,
+          template.title,
+          template.content,
+          template.createdAt,
+          template.updatedAt
+        ].join('\u0001');
+      })
+      .join('\u0002');
+  }
+
+  function refreshTemplatesFromStorage() {
+    const nextTemplates = storage.loadTemplates().map((template) => hydrateTemplate(template));
+    if (getTemplateSignature(nextTemplates) === getTemplateSignature(state.templates)) {
+      return;
+    }
+
+    state.templates = nextTemplates;
+    state.selectedTemplateIds = getValidSelectedTemplateIds(state.selectedTemplateIds);
+    if (state.activeTemplateId && !state.templates.some((template) => template.id === state.activeTemplateId)) {
+      state.globalNoteView = 'note';
+      state.activeTemplateId = '';
+      state.draftTemplate = null;
+    }
   }
 
   function hasTemplateDraftContent(template) {
@@ -188,6 +217,7 @@ function createPinFixApp() {
   }
 
   function loadPageData() {
+    refreshTemplatesFromStorage();
     const pageData = storage.loadPageData(window.location.href);
     state.settings = {
       ...state.settings,
@@ -203,7 +233,7 @@ function createPinFixApp() {
     state.activeTemplateId = '';
     state.draftTemplate = null;
     state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? Math.max(pageData.pageSettings.globalNoteHeight, 420)
+      ? Math.max(pageData.pageSettings.globalNoteHeight, 500)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -578,6 +608,11 @@ function createPinFixApp() {
 
   function toggleGlobalPanel(next) {
     const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
+    if (!nextOpen) {
+      commitGlobalTemplateDraft(false);
+    } else {
+      refreshTemplatesFromStorage();
+    }
     state.globalNoteOpen = nextOpen;
     if (nextOpen) {
       clearCandidate();
@@ -592,6 +627,7 @@ function createPinFixApp() {
   }
 
   function showGlobalNoteView() {
+    commitGlobalTemplateDraft(false);
     state.globalNoteView = 'note';
     state.activeTemplateId = '';
     state.draftTemplate = null;
@@ -599,6 +635,7 @@ function createPinFixApp() {
   }
 
   function showGlobalTemplate(id) {
+    commitGlobalTemplateDraft(false);
     const template = state.templates.find((item) => item.id === id);
     if (!template) {
       return;
@@ -614,6 +651,7 @@ function createPinFixApp() {
   }
 
   function createGlobalTemplateDraft() {
+    commitGlobalTemplateDraft(false);
     state.globalNoteView = 'template';
     state.activeTemplateId = '';
     state.draftTemplate = {
@@ -624,6 +662,10 @@ function createPinFixApp() {
   }
 
   function updateGlobalTemplateDraft(field, value) {
+    if (field !== 'title' && field !== 'content') {
+      return;
+    }
+
     if (!state.draftTemplate) {
       state.draftTemplate = {
         title: '',
@@ -701,6 +743,10 @@ function createPinFixApp() {
   }
 
   function deleteGlobalTemplate(id) {
+    if (id === state.activeTemplateId) {
+      commitGlobalTemplateDraft(false);
+    }
+
     const template = state.templates.find((item) => item.id === id);
     if (!template) {
       return;
@@ -835,6 +881,7 @@ function createPinFixApp() {
   function toggleOpen(forceValue) {
     const nextOpen = typeof forceValue === 'boolean' ? forceValue : !state.open;
     if (!nextOpen) {
+      commitGlobalTemplateDraft(false);
       savePageData();
     }
     state.open = nextOpen;
@@ -973,6 +1020,8 @@ function createPinFixApp() {
   }
 
   async function copyNotes() {
+    commitGlobalTemplateDraft(false);
+    refreshTemplatesFromStorage();
     const businessNote = getCombinedBusinessNote();
     if (!state.annotations.length && !businessNote) {
       showToast('nothingToCopy');
