@@ -4,6 +4,11 @@ function createSelectorManager(options) {
   let currentIndex = 0;
   let lastPoint = null;
   let manualIndexLocked = false;
+  let dragStart = null;
+  let dragSelecting = false;
+  let suppressNextClick = false;
+  const dragSelectThreshold = 8;
+  const minDragSelectSize = 24;
 
   function isIgnoredElement(element) {
     return !element || options.isIgnored(element);
@@ -181,6 +186,22 @@ function createSelectorManager(options) {
     });
   }
 
+  function createDragRect(point) {
+    const left = Math.min(dragStart.pageX, point.pageX);
+    const top = Math.min(dragStart.pageY, point.pageY);
+    const right = Math.max(dragStart.pageX, point.pageX);
+    const bottom = Math.max(dragStart.pageY, point.pageY);
+
+    return {
+      pageLeft: left,
+      pageTop: top,
+      width: right - left,
+      height: bottom - top,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
+    };
+  }
+
   function refreshFromPoint(point) {
     if (!enabled || !isSelectionActive() || !point) {
       return;
@@ -212,6 +233,33 @@ function createSelectorManager(options) {
     }
 
     lastPoint = { x: event.clientX, y: event.clientY };
+    if (dragStart && event.pointerId === dragStart.pointerId) {
+      const point = {
+        pageX: event.pageX,
+        pageY: event.pageY
+      };
+      const distance = Math.hypot(event.clientX - dragStart.clientX, event.clientY - dragStart.clientY);
+
+      if (dragSelecting || distance >= dragSelectThreshold) {
+        if (!dragSelecting && window.getSelection) {
+          const selection = window.getSelection();
+          if (selection && typeof selection.removeAllRanges === 'function') {
+            selection.removeAllRanges();
+          }
+        }
+        dragSelecting = true;
+        suppressNextClick = true;
+        currentChain = [];
+        currentIndex = 0;
+        manualIndexLocked = false;
+        if (typeof options.onDragSelectChange === 'function') {
+          options.onDragSelectChange(createDragRect(point));
+        }
+        stopSelectionEvent(event);
+        return;
+      }
+    }
+
     refreshFromPoint(lastPoint);
   }
 
@@ -221,7 +269,80 @@ function createSelectorManager(options) {
     event.stopImmediatePropagation();
   }
 
+  function clearDragSelect(notify = true) {
+    dragStart = null;
+    dragSelecting = false;
+    if (notify && typeof options.onDragSelectChange === 'function') {
+      options.onDragSelectChange(null);
+    }
+  }
+
+  function handlePointerDown(event) {
+    if (
+      !enabled ||
+      !isSelectionActive() ||
+      getSelectionMode() === 'mask' ||
+      event.button !== 0 ||
+      event.isPrimary === false ||
+      isIgnoredElement(event.target) ||
+      isEditableTarget(event.target)
+    ) {
+      return;
+    }
+
+    dragStart = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      pageX: event.pageX,
+      pageY: event.pageY
+    };
+    dragSelecting = false;
+  }
+
+  function handlePointerUp(event) {
+    if (!dragStart || event.pointerId !== dragStart.pointerId) {
+      return;
+    }
+
+    if (!dragSelecting) {
+      clearDragSelect(false);
+      return;
+    }
+
+    const rect = createDragRect({
+      pageX: event.pageX,
+      pageY: event.pageY
+    });
+    clearDragSelect(false);
+    stopSelectionEvent(event);
+
+    if (rect.width >= minDragSelectSize && rect.height >= minDragSelectSize && typeof options.onAreaSelect === 'function') {
+      options.onAreaSelect(rect);
+    } else if (typeof options.onDragSelectChange === 'function') {
+      options.onDragSelectChange(null);
+    }
+  }
+
+  function handlePointerCancel(event) {
+    if (!dragStart || event.pointerId !== dragStart.pointerId) {
+      return;
+    }
+
+    if (dragSelecting) {
+      stopSelectionEvent(event);
+    }
+    suppressNextClick = false;
+    clearDragSelect(true);
+  }
+
   function handleClick(event) {
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      stopSelectionEvent(event);
+      return;
+    }
+
     if (!enabled || !isSelectionActive() || getSelectionMode() !== 'mask') {
       return;
     }
@@ -298,7 +419,10 @@ function createSelectorManager(options) {
       }
 
       enabled = true;
+      window.addEventListener('pointerdown', handlePointerDown, true);
       window.addEventListener('pointermove', handlePointerMove, true);
+      window.addEventListener('pointerup', handlePointerUp, true);
+      window.addEventListener('pointercancel', handlePointerCancel, true);
       window.addEventListener('click', handleClick, true);
       window.addEventListener('contextmenu', handleContextMenu, true);
       window.addEventListener('keydown', handleKeydown, true);
@@ -316,7 +440,12 @@ function createSelectorManager(options) {
       currentChain = [];
       currentIndex = 0;
       manualIndexLocked = false;
+      suppressNextClick = false;
+      clearDragSelect(true);
+      window.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('pointermove', handlePointerMove, true);
+      window.removeEventListener('pointerup', handlePointerUp, true);
+      window.removeEventListener('pointercancel', handlePointerCancel, true);
       window.removeEventListener('click', handleClick, true);
       window.removeEventListener('contextmenu', handleContextMenu, true);
       window.removeEventListener('keydown', handleKeydown, true);

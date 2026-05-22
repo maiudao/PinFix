@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,8 +7,10 @@ const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 const outputFile = path.join(distDir, 'pinfix.user.js');
 const rootOutputFile = path.join(rootDir, 'pinfix.user.js');
+const extensionSourceDir = path.join(rootDir, 'src', 'extension');
+const extensionOutputDir = path.join(distDir, 'chrome-extension');
 
-const parts = [
+const userscriptParts = [
   'src/userscript.header.txt',
   'src/modules/config.js',
   'src/modules/utils.js',
@@ -24,7 +26,20 @@ const parts = [
   'src/modules/app.js'
 ];
 
-const chunks = [];
+const runtimeParts = [
+  'src/modules/config.js',
+  'src/modules/utils.js',
+  'src/modules/i18n.js',
+  'src/modules/storage.js',
+  'src/modules/selector.js',
+  'src/modules/anchors.js',
+  'src/modules/review.js',
+  'vendor/html2canvas.min.js',
+  'src/modules/exporters.js',
+  'src/modules/styles.js',
+  'src/modules/ui.js',
+  'src/modules/app.js'
+];
 
 function splitLongStringLiteral(raw, quote, maxLength = 1200) {
   const parts = [];
@@ -171,15 +186,122 @@ function makeEditorFriendly(part, content) {
   return wrapLongCodeLines(splitLongStringTokens(content));
 }
 
-for (const part of parts) {
-  const filePath = path.join(rootDir, part);
-  const content = await readFile(filePath, 'utf8');
-  chunks.push(makeEditorFriendly(part, content).trimEnd());
+async function buildBundle(parts) {
+  const chunks = [];
+
+  for (const part of parts) {
+    const filePath = path.join(rootDir, part);
+    const content = await readFile(filePath, 'utf8');
+    chunks.push(makeEditorFriendly(part, content).trimEnd());
+  }
+
+  return `${chunks.join('\n\n')}\n`;
+}
+
+function wrapExtensionContentScript(content) {
+  return `(() => {
+  if (window.__pinfixExtensionBundleLoaded__) {
+    return;
+  }
+
+  window.__pinfixExtensionBundleLoaded__ = true;
+  window.__pinfixExtensionMode__ = true;
+
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message && message.type === 'PINFIX_PING') {
+        sendResponse({ ready: true });
+        return false;
+      }
+
+      if (message && message.type === 'PINFIX_APPLY_GLOBAL_SETTINGS') {
+        window.__pinfixExtensionStorageCache__ = window.__pinfixExtensionStorageCache__ || {};
+        window.__pinfixExtensionStorageCache__['pinfix:global'] = {
+          version: 1,
+          savedAt: Date.now(),
+          settings: message.settings || {}
+        };
+        if (window.__pinfixApp__ && typeof window.__pinfixApp__.reloadGlobalSettings === 'function') {
+          window.__pinfixApp__.reloadGlobalSettings();
+        }
+        sendResponse({ ok: true });
+        return false;
+      }
+
+      if (message && (message.type === 'PINFIX_CURRENT_PAGE_DATA_CLEARED' || message.type === 'PINFIX_ALL_DATA_CLEARED')) {
+        if (message.type === 'PINFIX_ALL_DATA_CLEARED') {
+          window.__pinfixExtensionStorageCache__ = {};
+        }
+        if (message.type === 'PINFIX_CURRENT_PAGE_DATA_CLEARED' && message.key) {
+          window.__pinfixExtensionStorageCache__ = window.__pinfixExtensionStorageCache__ || {};
+          delete window.__pinfixExtensionStorageCache__[message.key];
+        }
+        if (window.__pinfixApp__ && typeof window.__pinfixApp__.reloadPageData === 'function') {
+          window.__pinfixApp__.reloadPageData();
+        }
+        sendResponse({ ok: true });
+      }
+      return false;
+    });
+  }
+
+  const startPinFixBundle = () => {
+${content.trimEnd()
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n')}
+  };
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(null)
+      .then((items) => {
+        window.__pinfixExtensionStorageCache__ = items || {};
+        startPinFixBundle();
+      })
+      .catch(() => {
+        window.__pinfixExtensionStorageCache__ = {};
+        startPinFixBundle();
+      });
+    return;
+  }
+
+  window.__pinfixExtensionStorageCache__ = {};
+  startPinFixBundle();
+})();
+`;
+}
+
+async function copyDirectory(sourceDir, targetDir) {
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDirectory(sourcePath, targetPath);
+      continue;
+    }
+
+    const content = await readFile(sourcePath);
+    await writeFile(targetPath, content);
+  }
 }
 
 await mkdir(distDir, { recursive: true });
-const bundle = `${chunks.join('\n\n')}\n`;
+const bundle = await buildBundle(userscriptParts);
 await writeFile(outputFile, bundle, 'utf8');
 await writeFile(rootOutputFile, bundle, 'utf8');
 
-console.log(`Built ${path.relative(rootDir, outputFile)} and ${path.relative(rootDir, rootOutputFile)}`);
+await rm(extensionOutputDir, { recursive: true, force: true });
+await copyDirectory(extensionSourceDir, extensionOutputDir);
+
+const extensionRuntime = await buildBundle(runtimeParts);
+await writeFile(
+  path.join(extensionOutputDir, 'pinfix-content.js'),
+  wrapExtensionContentScript(extensionRuntime),
+  'utf8'
+);
+
+console.log(`Built ${path.relative(rootDir, outputFile)}, ${path.relative(rootDir, rootOutputFile)}, and ${path.relative(rootDir, extensionOutputDir)}`);

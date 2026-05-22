@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>支持 PinFix</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="settings-shell">
+    <header class="page-header">
+      <img src="assets/icons/icon-48.png" alt="" width="48" height="48">
+      <div>
+        <h1>支持 PinFix</h1>
+        <p id="donationIntro">如果 PinFix 帮你更清楚地交代网页修改需求，可以自愿支持作者。</p>
+      </div>
+    </header>
+
+    <section class="settings-panel" aria-labelledby="donationTitle">
+      <h2 id="donationTitle">自愿打赏</h2>
+      <p>打赏不会解锁额外功能，也不会影响 PinFix 使用。插件不会弹窗催促，不会上传付款信息。</p>
+      <div id="donationCodes" class="donation-grid"></div>
+    </section>
+
+    <section class="settings-panel" aria-labelledby="editTitle">
+      <h2 id="editTitle">收款码放置入口</h2>
+      <p>
+        把收款码图片放到 <code>src/extension/assets/donate/</code>，
+        再编辑 <code>src/extension/donation.config.json</code> 里的路径和文案。
+      </p>
+      <p class="helper-text">重新运行 <code>npm run build</code> 后，收款码会复制到插件包里。</p>
+    </section>
+  </main>
+  <script src="donation.js"></script>
+</body>
+</html>

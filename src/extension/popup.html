@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PinFix</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup-shell">
+    <header class="popup-header">
+      <img src="assets/icons/icon-32.png" alt="" width="32" height="32">
+      <div>
+        <h1>PinFix</h1>
+        <p>给网页修改点编号，写说明，复制给 Codex 或开发者。</p>
+      </div>
+    </header>
+
+    <button id="activateButton" class="primary-button" type="button">
+      开启当前页面标注
+    </button>
+
+    <section class="quick-steps" aria-label="使用步骤">
+      <span>1. 开启</span>
+      <span>2. 标出位置</span>
+      <span>3. 复制说明</span>
+    </section>
+
+    <p id="statusText" class="status-text" role="status">
+      点击后，PinFix 只会在当前页面显示。
+    </p>
+
+    <nav class="popup-links" aria-label="PinFix links">
+      <button id="optionsButton" type="button">设置</button>
+      <button id="donationButton" type="button">支持作者</button>
+    </nav>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

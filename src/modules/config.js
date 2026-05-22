@@ -50,5 +50,6 @@ const PINFIX_DEFAULT_SETTINGS = {
   contrastMode: 'auto',
   countdown: 5,
   notesVisible: true,
+  launcherPosition: 'left-center',
   lastTool: 'select'
 };

@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "intro": "如果 PinFix 帮你更清楚地交代网页修改需求，可以自愿支持作者。",
+  "methods": [
+    {
+      "name": "微信",
+      "enabled": false,
+      "image": "assets/donate/wechat.png",
+      "hint": "微信扫码支持"
+    },
+    {
+      "name": "支付宝",
+      "enabled": false,
+      "image": "assets/donate/alipay.png",
+      "hint": "支付宝扫码支持"
+    }
+  ]
+}

@@ -1,14 +1,14 @@
 # PinFix
 
-PinFix is a Tampermonkey userscript for marking up real web pages. It helps product owners, designers, testers, and non-programmers point at page areas, write change requests, and send developers or Codex a clear screenshot plus structured notes.
+PinFix is a web page annotation tool for marking up real web pages. It helps product owners, designers, testers, and non-programmers point at page areas, write change requests, and send developers or Codex a clear screenshot plus structured notes.
 
-PinFix 是一个油猴网页标注脚本。它适合产品负责人、设计师、测试人员和不写代码的人，用来在真实网页上标出哪里要改、写清楚怎么改，然后把截图和结构化说明发给开发或 Codex。
+PinFix 是一个网页标注工具。它适合产品负责人、设计师、测试人员和不写代码的人，用来在真实网页上标出哪里要改、写清楚怎么改，然后把截图和结构化说明发给开发或 Codex。
 
 ## 中文说明
 
 ### PinFix 能做什么
 
-- 在网页上双击模块生成编号标注。
+- 右键网页模块或拖框区域生成编号标注。
 - 给每个编号写“修改要求”。
 - 复制结构化 Markdown 说明。
 - 截取或保存当前可见区域图片。
@@ -27,22 +27,23 @@ PinFix 是一个油猴网页标注脚本。它适合产品负责人、设计师�
 
 ### 安装
 
-1. 安装 Tampermonkey。
-2. 打开 [pinfix.user.js](pinfix.user.js)。
-3. 在 Tampermonkey 里确认安装。
+PinFix 现在有两种安装方式：
 
-普通使用只需要安装根目录这个 `pinfix.user.js` 文件。
+- 油猴版：安装 Tampermonkey，打开 [pinfix.user.js](pinfix.user.js)，在 Tampermonkey 里确认安装。
+- Chrome 插件版：运行 `npm run build`，打开 `chrome://extensions/`，启用开发者模式，加载 `dist/chrome-extension`。
+
+普通用户如果只想快速试用，可以继续安装根目录这个 `pinfix.user.js` 文件。Chrome 插件版适合需要浏览器原生可见区域截图、设置页、自动显示授权和支持作者入口的场景。
 
 ### 使用
 
 1. 打开需要标注的网页。
 2. 点击左侧的双圆点入口，打开 PinFix。
 3. 点 `选择`，把鼠标移到要标注的网页模块上。
-4. 双击模块生成编号，或者点击候选框中间的普通标注按钮。
+4. 右键模块生成编号；也可以拖框圈住多个模块，或点击候选框里的普通标注按钮。
 5. 点击红框、编号或写要求按钮，填写这一处的修改要求。
-6. 继续标注其他模块；如果要选内部小模块，可以直接在已标注区域里继续双击内部元素。
+6. 继续标注其他模块；如果要选内部小模块，可以把鼠标移到小模块上右键生成编号。
 7. 点 `复制`，复制结构化文字说明。
-8. 点 `截图 > 保存到本地` 保存当前可见区域图片，或双击 `截图` 按钮快速截图。
+8. 左键点 `截图` 后像系统截图一样拖框，松开后会优先复制到剪贴板；右键点 `截图` 可打开原来的截图面板。
 
 ### 常用功能
 
@@ -61,9 +62,12 @@ PinFix 是一个油猴网页标注脚本。它适合产品负责人、设计师�
 
 补充说明模板保存在油猴脚本自己的本地存储里，所有网页都能共用同一套模板。清空当前页只会清空当前页正文和勾选状态，不会删除模板。
 
+Chrome 插件版会把设置、页面标注、遮挡、补充说明和模板保存到本机 `chrome.storage.local`。如果开启“自动显示入口”，PinFix 只会在用户手动加入并授权的网站自动显示，不会默认读取所有网站。
+
 ### 截图说明
 
-- 双击 `截图` 按钮会优先把当前可见区域图片复制到剪贴板。
+- 左键点 `截图` 会进入框选截图，松开后优先把选区图片复制到剪贴板。
+- 右键点 `截图` 会打开截图面板，里面仍可保存当前可见区域或复制图片。
 - 如果浏览器限制图片复制，PinFix 会自动下载 PNG。
 - `截图 > 保存到本地` 会直接保存当前可见区域 PNG。
 - `截图 > 截图准备` 会隐藏工具栏和输入框，只保留网页、红框和编号，方便用系统截图。
@@ -84,7 +88,7 @@ PinFix lets you annotate a live web page, number the areas that need changes, wr
 
 It helps you:
 
-- Double-click page modules to create numbered annotations.
+- Right-click page modules or drag an area to create numbered annotations.
 - Write a change request for each annotation.
 - Copy structured Markdown notes.
 - Save or copy a screenshot of the current viewport.
@@ -103,22 +107,23 @@ It helps you:
 
 ### Install
 
-1. Install Tampermonkey.
-2. Open [pinfix.user.js](pinfix.user.js).
-3. Confirm installation in Tampermonkey.
+PinFix now has two install options:
 
-For normal use, install only the root `pinfix.user.js` file.
+- Userscript: install Tampermonkey, open [pinfix.user.js](pinfix.user.js), and confirm installation.
+- Chrome extension: run `npm run build`, open `chrome://extensions/`, enable Developer mode, and load `dist/chrome-extension`.
+
+For quick testing, install only the root `pinfix.user.js` file. The Chrome extension build is useful for native visible-tab capture, options, optional auto-show permissions, and the author support page.
 
 ### How To Use
 
 1. Open the page you want to review.
 2. Click the small double-dot launcher on the left side.
 3. Click `Select`, then move your mouse over the page module.
-4. Double-click the module to create an annotation, or use the annotate button in the candidate toolbar.
+4. Right-click the module to create an annotation. You can also drag an area or use the annotate button in the candidate toolbar.
 5. Click the red box, number label, or edit button to write the change request.
 6. Continue annotating. You can still select smaller elements inside an already annotated larger module.
 7. Click `Copy` to copy structured Markdown notes.
-8. Use `Capture > Save locally`, or double-click `Capture` for a quick screenshot.
+8. Left-click `Capture` to drag-select an area and copy it when possible. Right-click `Capture` to open the capture panel.
 
 ### Main Tools
 
@@ -137,9 +142,12 @@ Closing PinFix does not delete data. Reopen it and the current page annotations 
 
 More-notes templates are stored in the userscript's own local storage and are shared across websites. Clearing one page removes only that page's note text and selected templates, not the shared template library.
 
+The Chrome extension build stores settings, annotations, masks, notes, and templates in local `chrome.storage.local`. Auto-show uses optional site permissions only after the user adds and approves a site.
+
 ### Screenshot Notes
 
-- Double-click `Capture` to copy the current viewport image when the browser allows it.
+- Left-click `Capture` to drag-select an area and copy the image when the browser allows it.
+- Right-click `Capture` to open the capture panel for viewport save/copy options.
 - If image clipboard access is blocked, PinFix downloads a PNG instead.
 - `Capture > Save locally` saves the current viewport as PNG.
 - `Capture > Screenshot mode` hides PinFix controls so you can use the system screenshot tool.
@@ -158,7 +166,11 @@ The installable userscript is:
 
 - [pinfix.user.js](pinfix.user.js)
 
-Source files are modular under `src/`, and the build output is a single userscript.
+The local Chrome extension package is generated at:
+
+- `dist/chrome-extension`
+
+Source files are modular under `src/`, and the build output includes both the single userscript and Chrome extension package.
 
 ```bash
 npm run build
@@ -168,7 +180,15 @@ The build updates:
 
 - [pinfix.user.js](pinfix.user.js)
 - [dist/pinfix.user.js](dist/pinfix.user.js)
+- `dist/chrome-extension`
 
 Local demo:
 
 - [demo/index.html](demo/index.html)
+
+Extension handoff docs:
+
+- `src/extension/VERIFY.md`
+- `src/extension/store-listing.zh-CN.md`
+- `src/extension/privacy-policy.zh-CN.md`
+- `src/extension/store-assets-and-review.zh-CN.md`

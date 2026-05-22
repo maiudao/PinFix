@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PinFix 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="settings-shell">
+    <header class="page-header">
+      <img src="assets/icons/icon-48.png" alt="" width="48" height="48">
+      <div>
+        <h1>PinFix 设置</h1>
+        <p>设置会保存在本机浏览器里。已打开 PinFix 的页面会尽量立即同步，个别网页刷新后生效。</p>
+      </div>
+    </header>
+
+    <form id="settingsForm" class="settings-grid">
+      <section class="settings-panel" aria-labelledby="basicTitle">
+        <h2 id="basicTitle">基础体验</h2>
+        <label class="field">
+          <span>语言</span>
+          <select name="language">
+            <option value="auto">跟随浏览器</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>小点点位置</span>
+          <select name="launcherPosition">
+            <option value="left-center">左侧居中</option>
+            <option value="right-center">右侧居中</option>
+            <option value="right-bottom">右下角</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="settings-panel" aria-labelledby="styleTitle">
+        <h2 id="styleTitle">默认标注样式</h2>
+        <fieldset class="swatch-field">
+          <legend>颜色</legend>
+          <div id="colorPresetGroup" class="swatch-grid"></div>
+        </fieldset>
+
+        <div class="two-column">
+          <label class="field">
+            <span>线宽</span>
+            <select name="lineWidth">
+              <option value="thin">细</option>
+              <option value="medium">中</option>
+              <option value="thick">粗</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>编号大小</span>
+            <select name="labelSize">
+              <option value="small">小</option>
+              <option value="medium">中</option>
+              <option value="large">大</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-panel" aria-labelledby="autoTitle">
+        <h2 id="autoTitle">自动显示入口</h2>
+        <label class="toggle-row">
+          <input name="autoShowEnabled" type="checkbox">
+          <span>只在我授权的网站自动显示 PinFix</span>
+        </label>
+        <p class="helper-text">
+          为了避免一安装就申请读取所有网站，PinFix 只会在你手动加入并授权的网站自动显示。
+        </p>
+        <div class="action-row">
+          <button id="addCurrentSiteButton" type="button">加入当前网站</button>
+        </div>
+        <div id="currentSiteText" class="muted-line" aria-live="polite"></div>
+        <div id="siteList" class="site-list"></div>
+      </section>
+
+      <section class="settings-panel danger-panel" aria-labelledby="dataTitle">
+        <h2 id="dataTitle">本地数据</h2>
+        <p>PinFix 默认不上传网页内容。清理操作只影响本机 Chrome 里的 PinFix 数据。</p>
+        <div class="action-row">
+          <button id="clearCurrentPageButton" type="button">清理当前页数据</button>
+          <button id="clearAllDataButton" class="danger-button" type="button">清理全部数据</button>
+        </div>
+      </section>
+    </form>
+
+    <footer class="settings-footer">
+      <a href="privacy.html" target="_blank" rel="noreferrer">隐私说明</a>
+      <a href="store-listing.zh-CN.md" target="_blank" rel="noreferrer">商店文案</a>
+      <a href="donation.html" target="_blank" rel="noreferrer">支持作者</a>
+    </footer>
+
+    <div id="statusText" class="status-toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

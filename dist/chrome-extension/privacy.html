@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PinFix 隐私说明</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="settings-shell">
+    <header class="page-header">
+      <img src="assets/icons/icon-48.png" alt="" width="48" height="48">
+      <div>
+        <h1>PinFix 隐私说明</h1>
+        <p>PinFix 默认不上传网页内容、标注、备注、截图或模板。</p>
+      </div>
+    </header>
+
+    <section class="settings-panel">
+      <h2>本地保存的数据</h2>
+      <p>PinFix 会在 Chrome 本机存储中保存插件设置、页面标注、备注、隐私遮挡、页面级补充说明、常用模板，以及用户加入自动显示入口的网站列表。</p>
+      <p>这些数据保存在 <code>chrome.storage.local</code>，不会主动发送到服务器。</p>
+      <p>为了让设置页在 Chrome 后台休眠后仍能找到最近操作过的网页，PinFix 会在 <code>chrome.storage.session</code> 中临时保存最近可标注标签页信息。这个信息只用于当前浏览器会话。</p>
+    </section>
+
+    <section class="settings-panel">
+      <h2>网站权限</h2>
+      <p>PinFix 默认不读取所有网站。用户点击插件按钮后，PinFix 才会尝试在当前页面开启标注。</p>
+      <p>如果用户在设置页把某个网站加入“自动显示入口”，Chrome 会弹出网站授权确认。关闭自动显示或移除网站时，PinFix 会尝试撤销对应的可选网站权限。</p>
+    </section>
+
+    <section class="settings-panel">
+      <h2>截图与复制</h2>
+      <p>截图和复制由用户主动触发。图片会在本机生成，用户决定是否复制、保存或发送给其他人。</p>
+    </section>
+
+    <section class="settings-panel">
+      <h2>支持作者</h2>
+      <p>支持作者页面只展示作者配置的收款码。PinFix 不接入支付 SDK，不读取付款状态，也不会因为是否打赏改变功能。</p>
+    </section>
+
+    <section class="settings-panel">
+      <h2>清理数据</h2>
+      <p>用户可以在 PinFix 设置页清理当前页面数据，或清理全部 PinFix 本地数据。</p>
+    </section>
+  </main>
+</body>
+</html>

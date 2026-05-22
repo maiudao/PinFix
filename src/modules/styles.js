@@ -41,6 +41,19 @@ function getPinFixStyles() {
   pointer-events: auto;
 }
 
+#pinfix-root[data-launcher-position="right-center"] .pinfix-chrome {
+  left: auto;
+  right: 12px;
+}
+
+#pinfix-root[data-launcher-position="right-bottom"] .pinfix-chrome {
+  left: auto;
+  right: 14px;
+  top: auto;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: none;
+}
+
 .pinfix-overlay-layer {
   position: absolute;
   inset: 0;
@@ -557,7 +570,7 @@ function getPinFixStyles() {
   place-items: center;
   font-size: 11px;
   line-height: 1;
-  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  transition: background 120ms ease, box-shadow 120ms ease;
 }
 
 .pinfix-candidate-tools button {
@@ -570,6 +583,27 @@ function getPinFixStyles() {
   visibility: hidden;
   transform: scale(0.96);
   transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  transform-origin: center top;
+}
+
+.pinfix-annotation-tools.is-above {
+  transform-origin: center bottom;
+}
+
+.pinfix-annotation-tools::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--pinfix-tool-bridge, 12px);
+}
+
+.pinfix-annotation-tools.is-above::before {
+  bottom: calc(-1 * var(--pinfix-tool-bridge, 12px));
+}
+
+.pinfix-annotation-tools.is-below::before {
+  top: calc(-1 * var(--pinfix-tool-bridge, 12px));
 }
 
 .pinfix-annotation-box:hover + .pinfix-annotation-tools,
@@ -590,12 +624,11 @@ function getPinFixStyles() {
 .pinfix-inline-tools button:hover {
   background: #0f766e;
   box-shadow: 0 6px 12px rgba(15, 118, 110, 0.22);
-  transform: translateY(-0.5px);
 }
 
 .pinfix-candidate-tools button:active,
 .pinfix-inline-tools button:active {
-  transform: translateY(0) scale(0.97);
+  background: #115e59;
 }
 
 .pinfix-inline-tools button[data-action="delete-annotation"],
@@ -649,7 +682,16 @@ function getPinFixStyles() {
   white-space: nowrap;
 }
 
-.pinfix-area-capture-active .pinfix-chrome {
+.pinfix-area-capture-active .pinfix-chrome,
+.pinfix-area-capture-active .pinfix-popover,
+.pinfix-area-capture-active .pinfix-sidecar,
+.pinfix-area-capture-active .pinfix-note-card,
+.pinfix-area-capture-active .pinfix-global-strip,
+.pinfix-area-capture-active .pinfix-global-panel,
+.pinfix-area-capture-active .pinfix-candidate,
+.pinfix-area-capture-active .pinfix-toast,
+.pinfix-area-capture-active .pinfix-tooltip,
+.pinfix-area-capture-active .pinfix-inline-tools {
   display: none !important;
 }
 
@@ -901,7 +943,7 @@ function getPinFixStyles() {
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
 .pinfix-global-template-add {
@@ -1029,7 +1071,7 @@ function getPinFixStyles() {
   justify-content: center;
   gap: 7px;
   text-align: left;
-  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .pinfix-global-template-option.is-selected {
@@ -1095,7 +1137,7 @@ function getPinFixStyles() {
   cursor: pointer;
   color: #b91c1c;
   white-space: nowrap;
-  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .pinfix-global-empty {
@@ -1225,6 +1267,105 @@ function getPinFixStyles() {
 
 .pinfix-status-warn {
   color: #b45309;
+}
+
+@media (max-width: 640px) {
+  .pinfix-chrome,
+  #pinfix-root[data-launcher-position="right-center"] .pinfix-chrome,
+  #pinfix-root[data-launcher-position="right-bottom"] .pinfix-chrome {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    transform: none;
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .pinfix-launcher {
+    width: 48px;
+    height: 48px;
+  }
+
+  .pinfix-launcher::before {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pinfix-launcher::after {
+    width: 14px;
+    height: 14px;
+  }
+
+  .pinfix-toolbar {
+    flex-direction: row;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+    padding: 8px;
+    border-radius: 14px;
+    scrollbar-width: none;
+  }
+
+  .pinfix-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pinfix-tool-button {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .pinfix-toolbar-close {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
+
+  .pinfix-popover,
+  .pinfix-sidecar {
+    left: 12px !important;
+    right: 12px;
+    top: auto !important;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: min(72vh, calc(100vh - 104px));
+  }
+
+  .pinfix-note-card {
+    position: fixed;
+    left: 12px !important;
+    right: 12px;
+    top: auto !important;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    width: auto !important;
+    max-height: min(58vh, calc(100vh - 112px));
+    overflow: auto;
+  }
+
+  .pinfix-global-panel {
+    width: calc(100vw - 24px);
+    min-height: min(460px, calc(100vh - 96px));
+    max-height: calc(100vh - 96px);
+    bottom: calc(74px + env(safe-area-inset-bottom));
+    padding: 14px 12px 12px;
+  }
+
+  .pinfix-global-strip {
+    bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+
+  .pinfix-global-template-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 128px;
+  }
+
+  .pinfix-toast {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    max-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

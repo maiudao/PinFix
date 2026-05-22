@@ -3,6 +3,24 @@ function createStorage() {
   const templateKey = 'pinfix:templates';
   const pageKeyPrefix = 'pinfix:page';
 
+  function hasExtensionStorage() {
+    return Boolean(
+      window.__pinfixExtensionMode__ &&
+      window.__pinfixExtensionStorageCache__ &&
+      typeof chrome !== 'undefined' &&
+      chrome.storage &&
+      chrome.storage.local
+    );
+  }
+
+  function getExtensionCache() {
+    if (!window.__pinfixExtensionStorageCache__ || typeof window.__pinfixExtensionStorageCache__ !== 'object') {
+      window.__pinfixExtensionStorageCache__ = {};
+    }
+
+    return window.__pinfixExtensionStorageCache__;
+  }
+
   // Use a stable URL so dashboard pages with temporary query params
   // do not create a new save record every time a token changes.
   function normaliseUrl(urlValue) {
@@ -12,6 +30,31 @@ function createStorage() {
   }
 
   function loadJson(key, fallback) {
+    if (hasExtensionStorage()) {
+      const cache = getExtensionCache();
+      if (Object.prototype.hasOwnProperty.call(cache, key)) {
+        try {
+          return parseStoredJson(cache[key], fallback);
+        } catch (error) {
+          return fallback;
+        }
+      }
+
+      // Migrate old userscript page data when it is visible to the content script.
+      // Keep the old localStorage copy so users can still go back to the userscript.
+      const legacyPayload = loadLocalJson(key, null);
+      if (legacyPayload) {
+        saveJson(key, legacyPayload);
+        return legacyPayload;
+      }
+
+      return fallback;
+    }
+
+    return loadLocalJson(key, fallback);
+  }
+
+  function loadLocalJson(key, fallback) {
     try {
       const raw = window.localStorage.getItem(key);
       return raw ? JSON.parse(raw) : fallback;
@@ -21,12 +64,30 @@ function createStorage() {
   }
 
   function saveJson(key, value) {
+    if (hasExtensionStorage()) {
+      const cache = getExtensionCache();
+      cache[key] = value;
+      chrome.storage.local.set({ [key]: value }).catch(() => false);
+      return true;
+    }
+
     try {
       window.localStorage.setItem(key, JSON.stringify(value));
       return true;
     } catch (error) {
       return false;
     }
+  }
+
+  function removeJson(key) {
+    if (hasExtensionStorage()) {
+      const cache = getExtensionCache();
+      delete cache[key];
+      chrome.storage.local.remove(key).catch(() => false);
+      return;
+    }
+
+    window.localStorage.removeItem(key);
   }
 
   function parseStoredJson(raw, fallback) {
@@ -286,7 +347,7 @@ function createStorage() {
     },
     clearPageData(urlValue) {
       const key = `${pageKeyPrefix}:${normaliseUrl(urlValue)}`;
-      window.localStorage.removeItem(key);
+      removeJson(key);
     }
   };
 }

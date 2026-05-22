@@ -123,7 +123,7 @@ function createI18n() {
       actionShrinkMask: '缩小遮挡',
       actionExpandMask: '扩大遮挡',
       actionDeleteMask: '删除遮挡',
-      emptyState: '还没有标注，先点“选择”再双击网页模块',
+      emptyState: '还没有标注，先点“选择”，右键网页模块或拖框选择区域',
       pageTitle: '需要修改的页面',
       pageUrl: '页面地址',
       viewportMode: '截图模式：当前可见区域',

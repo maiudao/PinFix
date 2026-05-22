@@ -6,6 +6,7 @@ function createPinFixApp() {
   let focusTimer = null;
   let refreshScheduled = false;
   let lastScreenshotBlob = null;
+  let captureInProgress = false;
   let lastUrl = storage.normaliseUrl(window.location.href);
   let routeWatcherAttached = false;
 
@@ -76,7 +77,7 @@ function createPinFixApp() {
     onShowGlobalTemplate: (id) => showGlobalTemplate(id),
     onCreateGlobalTemplate: () => createGlobalTemplateDraft(),
     onChangeGlobalTemplateDraft: (field, value) => updateGlobalTemplateDraft(field, value),
-    onCommitGlobalTemplate: (shouldRender) => commitGlobalTemplateDraft(shouldRender),
+    onCommitGlobalTemplate: (shouldRender, commitOptions) => commitGlobalTemplateDraft(shouldRender, commitOptions),
     onDeleteGlobalTemplate: (id) => deleteGlobalTemplate(id),
     onToggleGlobalTemplateSelection: (id) => toggleGlobalTemplateSelection(id),
     onResizeGlobalNote: (height) => {
@@ -97,6 +98,15 @@ function createPinFixApp() {
       state.candidate = element ? captureElementRect(element) : null;
       render();
     },
+    onDragSelectChange: (rect) => {
+      if (state.globalNoteOpen || state.areaCaptureActive) {
+        return;
+      }
+      state.candidateElement = null;
+      state.candidate = rect;
+      render();
+    },
+    onAreaSelect: (rect) => addManualAnnotation(rect),
     onSelect: (element) => addSelectionItem(element)
   });
 
@@ -222,9 +232,10 @@ function createPinFixApp() {
   function loadPageData() {
     refreshTemplatesFromStorage();
     const pageData = storage.loadPageData(window.location.href);
+    const { launcherPosition, ...pageSettings } = pageData.pageSettings || {};
     state.settings = {
-      ...state.settings,
-      ...pageData.pageSettings
+      ...storage.loadGlobalSettings(),
+      ...pageSettings
     };
     state.annotations = (pageData.annotations || []).map((annotation) => hydrateAnnotation(annotation));
     state.masks = (pageData.masks || []).map((mask) => hydrateMask(mask));
@@ -235,8 +246,8 @@ function createPinFixApp() {
     state.globalNoteView = 'note';
     state.activeTemplateId = '';
     state.draftTemplate = null;
-    state.globalNoteHeight = pageData.pageSettings && pageData.pageSettings.globalNoteHeight
-      ? Math.max(pageData.pageSettings.globalNoteHeight, 500)
+    state.globalNoteHeight = pageSettings.globalNoteHeight
+      ? Math.max(pageSettings.globalNoteHeight, 500)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -496,6 +507,67 @@ function createPinFixApp() {
     render();
   }
 
+  function getElementAtManualRectCenter(rect) {
+    const clientX = clamp(rect.pageLeft + rect.width / 2 - window.scrollX, 0, window.innerWidth - 1);
+    const clientY = clamp(rect.pageTop + rect.height / 2 - window.scrollY, 0, window.innerHeight - 1);
+    const element = document.elementFromPoint(clientX, clientY);
+
+    return element instanceof HTMLElement ? element : document.body;
+  }
+
+  function addManualAnnotation(rect) {
+    if (!rect || rect.width < 24 || rect.height < 24) {
+      clearCandidate();
+      render();
+      return;
+    }
+
+    const manualRect = {
+      pageLeft: Math.max(0, rect.pageLeft),
+      pageTop: Math.max(0, rect.pageTop),
+      width: rect.width,
+      height: rect.height,
+      viewportWidth: rect.viewportWidth || window.innerWidth,
+      viewportHeight: rect.viewportHeight || window.innerHeight
+    };
+    const existing = state.annotations.find((annotation) => rectsRoughlyMatch(annotation.rect, manualRect));
+    if (existing) {
+      clearCandidate();
+      focusAnnotation(existing.id);
+      showToast('annotationExists');
+      return;
+    }
+
+    takeHistorySnapshot();
+    clearPendingActionConfirm();
+
+    const surfaceElement = getElementAtManualRectCenter(manualRect);
+    const annotation = {
+      id: createId('annotation'),
+      number: state.annotations.length + 1,
+      note: '',
+      anchor: null,
+      rect: manualRect,
+      surfaceTone: detectSurfaceTone(surfaceElement, state.settings.contrastMode),
+      style: {
+        colorPreset: state.settings.colorPreset,
+        lineWidth: state.settings.lineWidth,
+        labelSize: state.settings.labelSize,
+        labelStyle: state.settings.labelStyle,
+        boxPadding: state.settings.boxPadding
+      }
+    };
+
+    state.annotations.push(annotation);
+    state.activeAnnotationId = annotation.id;
+    state.editingAnnotationId = annotation.id;
+    state.settings.notesVisible = true;
+    clearCandidate();
+    saveGlobalSettings();
+    savePageData();
+    render();
+  }
+
   function addMask(element) {
     const anchor = buildElementAnchor(element);
     if (hasExistingMask(anchor, anchor.rect)) {
@@ -680,7 +752,7 @@ function createPinFixApp() {
     clearPendingActionConfirm();
   }
 
-  function commitGlobalTemplateDraft(shouldRender = true) {
+  function commitGlobalTemplateDraft(shouldRender = true, commitOptions = {}) {
     if (!state.draftTemplate) {
       return;
     }
@@ -692,6 +764,9 @@ function createPinFixApp() {
 
     if (!state.activeTemplateId) {
       if (!hasTemplateDraftContent(draft)) {
+        if (commitOptions.keepEmptyDraft) {
+          return;
+        }
         state.draftTemplate = null;
         state.globalNoteView = 'note';
         if (shouldRender) {
@@ -932,6 +1007,7 @@ function createPinFixApp() {
     if (tool === 'capture') {
       selector.disable();
       setSelectionActive(false);
+      clearCandidate();
       state.tool = 'capture';
       state.settings.lastTool = 'capture';
       state.activePopover = state.activePopover === 'capture' ? null : 'capture';
@@ -1064,10 +1140,15 @@ function createPinFixApp() {
   }
 
   async function exportImage(preferClipboard) {
+    if (captureInProgress) {
+      return;
+    }
+
     if (!confirmProceedWithIncompleteNotes(preferClipboard ? 'copy-image' : 'export-image')) {
       return;
     }
 
+    captureInProgress = true;
     try {
       const result = await exporters.exportViewportImage({
         preferClipboard
@@ -1084,12 +1165,18 @@ function createPinFixApp() {
       showToast('downloadedImage');
     } catch (error) {
       showToast(i18n.t(getLanguage(), 'exportLimit'));
+    } finally {
+      captureInProgress = false;
     }
   }
 
   function startAreaCapture() {
     if (!state.open) {
       state.open = true;
+    }
+
+    if (state.captureMode || countdownTimer) {
+      stopScreenshotMode(false);
     }
 
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -1129,6 +1216,10 @@ function createPinFixApp() {
   }
 
   async function captureAreaScreenshot(rect) {
+    if (captureInProgress) {
+      return;
+    }
+
     const selectedRect = rect && {
       x: Math.max(0, Number(rect.x) || 0),
       y: Math.max(0, Number(rect.y) || 0),
@@ -1141,6 +1232,7 @@ function createPinFixApp() {
       return;
     }
 
+    const deferredClipboard = exporters.createDeferredPngClipboardItem();
     state.areaCaptureActive = false;
     state.tool = 'select';
     state.activePopover = null;
@@ -1151,9 +1243,11 @@ function createPinFixApp() {
     }
     render();
 
+    captureInProgress = true;
     try {
       const result = await exporters.exportViewportImage({
         preferClipboard: true,
+        deferredClipboard,
         rect: selectedRect
       });
       lastScreenshotBlob = result.blob || null;
@@ -1173,7 +1267,12 @@ function createPinFixApp() {
         tone: 'success'
       });
     } catch (error) {
+      if (deferredClipboard && deferredClipboard.rejectBlob) {
+        deferredClipboard.rejectBlob(error);
+      }
       showToast(i18n.t(getLanguage(), 'exportLimit'), { duration: 3600 });
+    } finally {
+      captureInProgress = false;
     }
   }
 
@@ -1399,8 +1498,24 @@ function createPinFixApp() {
     window.addEventListener('keydown', handleWindowKeydown, true);
   }
 
+  function reloadGlobalSettings() {
+    state.settings = {
+      ...state.settings,
+      ...storage.loadGlobalSettings()
+    };
+    savePageData();
+    refreshAnnotations(true);
+  }
+
+  function reloadPageData() {
+    loadPageData();
+    render();
+  }
+
   return {
-    init
+    init,
+    reloadGlobalSettings,
+    reloadPageData
   };
 }
 
@@ -1424,6 +1539,7 @@ function createPinFixApp() {
     window.__pinfixInitialized__ = true;
     window.__pinfixBootstrapping__ = false;
     const app = createPinFixApp();
+    window.__pinfixApp__ = app;
     app.init();
   };
 

@@ -370,6 +370,8 @@ function createUI(options) {
     if (isGlobalTemplateField(field)) {
       const currentEditor = field.closest('[data-template-editor="true"]');
       if (nextFocus && currentEditor && currentEditor.contains(nextFocus)) {
+        options.onCommitGlobalTemplate(false, { keepEmptyDraft: true });
+        syncGlobalTemplateChrome(latestState);
         return;
       }
       options.onCommitGlobalTemplate(!nextFocus || !root.contains(nextFocus));
@@ -693,6 +695,7 @@ function createUI(options) {
     setRootSize();
     root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
     root.classList.toggle('pinfix-area-capture-active', Boolean(state.areaCaptureActive));
+    root.dataset.launcherPosition = state.settings.launcherPosition || 'left-center';
     renderChrome(state);
     if (!state.open) {
       renderClosedState();
@@ -933,7 +936,11 @@ function createUI(options) {
     popover.dataset.panel = state.activePopover;
     popover.innerHTML = buildPopoverContent(state);
     const maxLeft = Math.max(12, window.innerWidth - popover.offsetWidth - 12);
-    const nextLeft = clamp(toolbarBox.right + 12, 12, maxLeft);
+    const openLeft = toolbarBox.left > window.innerWidth / 2;
+    const preferredLeft = openLeft
+      ? toolbarBox.left - popover.offsetWidth - 12
+      : toolbarBox.right + 12;
+    const nextLeft = clamp(preferredLeft, 12, maxLeft);
     popover.style.left = `${nextLeft}px`;
     const maxTop = Math.max(12, window.innerHeight - popover.offsetHeight - 12);
     const nextTop = clamp(toolbarBox.top, 12, maxTop);
@@ -1202,6 +1209,41 @@ function createUI(options) {
     };
   }
 
+  function getExternalToolRailLayout(frameRect) {
+    const bounds = getOperationBounds();
+    const gap = 9;
+    const toolHeight = 28;
+    const toolWidth = 78;
+    const centerLeft = frameRect.pageLeft + frameRect.width / 2 - toolWidth / 2;
+    const belowTop = frameRect.pageTop + frameRect.height + gap;
+    const aboveTop = frameRect.pageTop - toolHeight - gap;
+    const centerY = frameRect.pageTop + frameRect.height / 2;
+    const viewportMiddle = window.scrollY + window.innerHeight / 2;
+    const belowFits = belowTop + toolHeight <= bounds.bottom;
+    const aboveFits = aboveTop >= bounds.top;
+    const preferBelow = centerY <= viewportMiddle;
+    let pageTop = preferBelow ? belowTop : aboveTop;
+    let placement = preferBelow ? 'below' : 'above';
+
+    if (preferBelow && !belowFits && aboveFits) {
+      pageTop = aboveTop;
+      placement = 'above';
+    } else if (!preferBelow && !aboveFits && belowFits) {
+      pageTop = belowTop;
+      placement = 'below';
+    }
+
+    pageTop = clampWithin(pageTop, bounds.top, Math.max(bounds.top, bounds.bottom - toolHeight));
+
+    return {
+      pageLeft: clampWithin(centerLeft, bounds.left, Math.max(bounds.left, bounds.right - toolWidth)),
+      pageTop,
+      width: toolWidth,
+      height: toolHeight,
+      placement
+    };
+  }
+
   function positionCandidateTools(displayRect, activeRenderInfo) {
     const tools = candidate.querySelector('.pinfix-candidate-tools');
     if (!tools) {
@@ -1245,6 +1287,14 @@ function createUI(options) {
     return rect.width >= PINFIX_MIN_TOOL_TARGET_WIDTH && rect.height >= PINFIX_MIN_TOOL_TARGET_HEIGHT;
   }
 
+  function shouldShowAnnotationTools(rect) {
+    if (!rect) {
+      return false;
+    }
+
+    return rect.width >= 24 && rect.height >= 24;
+  }
+
   function renderAnnotations(state) {
     const candidatePadding = PINFIX_BOX_PADDING_OPTIONS[state.settings.boxPadding] || 0;
     let candidateDisplayRect = null;
@@ -1257,7 +1307,7 @@ function createUI(options) {
       candidate.classList.add('pinfix-hidden');
     } else {
       const displayRect = clampBoxRect(expandRect(currentCandidate, candidatePadding));
-      candidateShowsTools = shouldShowToolRail(displayRect);
+      candidateShowsTools = Boolean(state.candidateElement) && shouldShowToolRail(displayRect);
       candidate.classList.remove('pinfix-hidden');
       candidate.style.left = `${displayRect.pageLeft}px`;
       candidate.style.top = `${displayRect.pageTop}px`;
@@ -1316,7 +1366,7 @@ function createUI(options) {
     }
     const frameRect = renderInfo.frameRect;
     const labelLayout = getLabelLayout(frameRect, labelSize);
-    const showsTools = shouldShowToolRail(frameRect);
+    const showsTools = shouldShowAnnotationTools(frameRect);
 
     const box = document.createElement('div');
     box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${boxInteractive ? 'is-interactive' : ''}`;
@@ -1364,11 +1414,12 @@ function createUI(options) {
 
   function renderAnnotationTools(annotation, renderInfo, labelRect, isActive, reserveCandidateSlot) {
     const frameRect = renderInfo.frameRect;
-    const position = getCompactToolRailLayout(frameRect, labelRect, 'annotation', reserveCandidateSlot);
+    const position = getExternalToolRailLayout(frameRect, labelRect, reserveCandidateSlot);
     const tools = document.createElement('div');
-    tools.className = `pinfix-inline-tools pinfix-annotation-tools ${isActive ? 'is-active' : ''}`;
+    tools.className = `pinfix-inline-tools pinfix-annotation-tools is-${position.placement} ${isActive ? 'is-active' : ''}`;
     tools.style.left = `${position.pageLeft}px`;
     tools.style.top = `${position.pageTop}px`;
+    tools.style.setProperty('--pinfix-tool-bridge', '12px');
     tools.innerHTML = `
       <button type="button" data-action="edit-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionEditNote'))}" aria-label="${escapeHtml(t('actionEditNote'))}">${iconSvg('edit')}</button>
       <button type="button" data-action="mask-annotation" data-id="${annotation.id}" title="${escapeHtml(t('actionMaskArea'))}" aria-label="${escapeHtml(t('actionMaskArea'))}">${iconSvg('mask')}</button>
@@ -1570,23 +1621,8 @@ function createUI(options) {
     }
 
     const panelHeight = state.globalNoteHeight;
-    const renderKey = state.globalNoteView === 'template'
-      ? `template:${state.activeTemplateId || 'draft'}`
-      : 'note';
-    const templateSignature = state.templates
-      .map((template) => template.id)
-      .join('|');
-    const selectedSignature = state.globalNoteView === 'note'
-      ? (state.selectedTemplateIds || []).join('|')
-      : '';
-    const nextUiKey = [
-      renderKey,
-      templateSignature,
-      selectedSignature,
-      state.pageTone,
-      state.templates.length,
-      state.globalNoteView === 'template' ? Boolean(state.activeTemplateId) : ''
-    ].join('::');
+    const renderKey = getGlobalPanelRenderKey(state);
+    const nextUiKey = getGlobalPanelUiKey(state);
     const canReuseEditingPanel = globalPanel.dataset.uiKey === nextUiKey && isGlobalPanelTextEditingActive();
 
     globalPanel.style.height = `${panelHeight}px`;
@@ -1619,6 +1655,60 @@ function createUI(options) {
     if (templateTextarea) {
       autoGrow(templateTextarea, Number(templateTextarea.dataset.maxHeight || 240));
     }
+  }
+
+  function getGlobalPanelRenderKey(state) {
+    return state.globalNoteView === 'template'
+      ? `template:${state.activeTemplateId || 'draft'}`
+      : 'note';
+  }
+
+  function getGlobalPanelUiKey(state) {
+    const templateSignature = state.templates
+      .map((template) => template.id)
+      .join('|');
+    const selectedSignature = state.globalNoteView === 'note'
+      ? (state.selectedTemplateIds || []).join('|')
+      : '';
+
+    return [
+      getGlobalPanelRenderKey(state),
+      templateSignature,
+      selectedSignature,
+      state.pageTone,
+      state.templates.length,
+      state.globalNoteView === 'template' ? Boolean(state.activeTemplateId) : ''
+    ].join('::');
+  }
+
+  function syncGlobalTemplateChrome(state) {
+    if (!state || !globalPanel || globalPanel.classList.contains('pinfix-hidden')) {
+      return;
+    }
+
+    const templateBar = globalPanel.querySelector('.pinfix-global-template-bar');
+    if (templateBar) {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = renderGlobalTemplateTabs(state).trim();
+      templateBar.replaceWith(wrapper.firstElementChild);
+    }
+
+    const editorTop = globalPanel.querySelector('.pinfix-global-editor-top');
+    if (editorTop && state.activeTemplateId) {
+      let deleteButton = editorTop.querySelector('[data-action="delete-global-template"]');
+      if (!deleteButton) {
+        deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'pinfix-global-template-danger';
+        deleteButton.dataset.action = 'delete-global-template';
+        deleteButton.textContent = t('templateDelete');
+        editorTop.appendChild(deleteButton);
+      }
+      deleteButton.dataset.id = state.activeTemplateId;
+    }
+
+    globalPanel.dataset.renderKey = getGlobalPanelRenderKey(state);
+    globalPanel.dataset.uiKey = getGlobalPanelUiKey(state);
   }
 
   function updateGlobalPanelLiveValues(state) {

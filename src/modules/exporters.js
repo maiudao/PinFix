@@ -84,6 +84,16 @@ function createExporters(options) {
     });
   }
 
+  function base64ToBlob(base64, mimeType) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    return new Blob([bytes], { type: mimeType || 'image/png' });
+  }
+
   async function tryCopyBlob(blob) {
     if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
       return false;
@@ -102,7 +112,80 @@ function createExporters(options) {
     return true;
   }
 
+  function createDeferredPngClipboardItem() {
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      return null;
+    }
+
+    let resolveBlob;
+    let rejectBlob;
+    const blobPromise = new Promise((resolve, reject) => {
+      resolveBlob = resolve;
+      rejectBlob = reject;
+    });
+
+    const copyPromise = navigator.clipboard.write([
+      new ClipboardItem({
+        'image/png': blobPromise
+      })
+    ]);
+    copyPromise.catch(() => false);
+
+    return {
+      copyPromise,
+      resolveBlob,
+      rejectBlob
+    };
+  }
+
+  async function captureWithChromeVisibleTab(context) {
+    if (
+      !window.__pinfixExtensionMode__ ||
+      typeof chrome === 'undefined' ||
+      !chrome.runtime ||
+      !chrome.runtime.sendMessage ||
+      context.rect
+    ) {
+      return null;
+    }
+
+    await options.beforeCapture();
+    await sleep(80);
+
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'PINFIX_CAPTURE_VISIBLE_TAB' });
+      if (!response || !response.ok || !response.base64) {
+        throw new Error(response && response.reason ? response.reason : 'Chrome screenshot failed');
+      }
+
+      const blob = base64ToBlob(response.base64, response.mimeType);
+      let copied = false;
+      if (context.preferClipboard) {
+        try {
+          copied = await tryCopyBlob(blob);
+        } catch (error) {
+          copied = false;
+        }
+      }
+
+      let downloaded = false;
+      if (!copied) {
+        downloadBlob(blob, `pinfix-${Date.now()}.png`);
+        downloaded = true;
+      }
+
+      return { copied, downloaded, canvas: null, blob, nativeCapture: true };
+    } finally {
+      await options.afterCapture();
+    }
+  }
+
   async function exportViewportImage(context) {
+    const nativeResult = await captureWithChromeVisibleTab(context || {});
+    if (nativeResult) {
+      return nativeResult;
+    }
+
     if (typeof html2canvas !== 'function') {
       throw new Error('html2canvas is not available');
     }
@@ -150,10 +233,22 @@ function createExporters(options) {
 
       let copied = false;
       if (context.preferClipboard) {
-        try {
-          copied = await tryCopyBlob(blob);
-        } catch (error) {
-          copied = false;
+        if (context.deferredClipboard && context.deferredClipboard.resolveBlob) {
+          try {
+            context.deferredClipboard.resolveBlob(blob);
+            await context.deferredClipboard.copyPromise;
+            copied = true;
+          } catch (error) {
+            copied = false;
+          }
+        }
+
+        if (!copied) {
+          try {
+            copied = await tryCopyBlob(blob);
+          } catch (error) {
+            copied = false;
+          }
         }
       }
 
@@ -172,6 +267,7 @@ function createExporters(options) {
   return {
     buildMarkdown,
     copyNotes,
+    createDeferredPngClipboardItem,
     downloadBlob,
     exportViewportImage
   };
