@@ -13,13 +13,6 @@ function createExporters(options) {
     lines.push(`${i18n.t(language, 'pageUrl')}：${window.location.href}`);
     lines.push(i18n.t(language, 'viewportMode'));
     lines.push('');
-    lines.push(`${i18n.t(language, 'changeSummary')}：`);
-
-    annotations.forEach((annotation) => {
-      lines.push(`${formatBullet(annotation.number)}：${summariseNote(annotation.note) || '-'}`);
-    });
-
-    lines.push('');
     lines.push(`${i18n.t(language, 'changeDetails')}：`);
     lines.push('');
 
@@ -35,7 +28,6 @@ function createExporters(options) {
     lines.push(`${i18n.t(language, 'extraInfo')}：`);
     lines.push(`- ${i18n.t(language, 'viewportInfo')}：${window.innerWidth} x ${window.innerHeight}`);
     lines.push(`- ${i18n.t(language, 'countInfo')}：${annotations.length}`);
-    lines.push(`- ${i18n.t(language, 'timeInfo')}：${formatTimestamp(new Date(), language)}`);
 
     return lines.join('\n');
   }
