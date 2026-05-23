@@ -7,11 +7,20 @@ function createSelectorManager(options) {
   let dragStart = null;
   let dragSelecting = false;
   let suppressNextClick = false;
+  let transparentOverlayDepth = 0;
   const dragSelectThreshold = 8;
   const minDragSelectSize = 24;
 
   function isIgnoredElement(element) {
     return !element || options.isIgnored(element);
+  }
+
+  function isTransparentOverlayElement(element) {
+    return Boolean(
+      element &&
+      element.closest &&
+      element.closest('#pinfix-root .pinfix-annotation-box, #pinfix-root .pinfix-label')
+    );
   }
 
   function isVisibleElement(element) {
@@ -89,6 +98,18 @@ function createSelectorManager(options) {
     return typeof options.isSelectionActive === 'function' ? options.isSelectionActive() : true;
   }
 
+  function shouldAvoidCandidate(element) {
+    if (typeof options.shouldAvoidCandidate !== 'function') {
+      return false;
+    }
+
+    try {
+      return Boolean(options.shouldAvoidCandidate(element));
+    } catch (error) {
+      return false;
+    }
+  }
+
   function getElementsAtPoint(point) {
     if (document.elementsFromPoint) {
       return document.elementsFromPoint(point.x, point.y).filter((item) => item instanceof HTMLElement);
@@ -102,6 +123,22 @@ function createSelectorManager(options) {
   // first real page element under the pointer, not our own annotation chrome.
   function getSelectableTarget(point) {
     const stack = getElementsAtPoint(point);
+    const overlays = stack.filter((element) => isTransparentOverlayElement(element));
+    if (overlays.length && transparentOverlayDepth < 4) {
+      transparentOverlayDepth += 1;
+      overlays.forEach((element) => {
+        element.hidden = true;
+      });
+      try {
+        return getSelectableTarget(point);
+      } finally {
+        overlays.forEach((element) => {
+          element.hidden = false;
+        });
+        transparentOverlayDepth -= 1;
+      }
+    }
+
     return stack.find((element) => !isIgnoredElement(element) && isMeaningfulCandidate(element)) || null;
   }
 
@@ -172,9 +209,16 @@ function createSelectorManager(options) {
       return 0;
     }
 
-    return chain
+    const ranked = chain
       .map((element, index) => ({ index, score: scoreDefaultCandidate(element, index) }))
-      .sort((left, right) => left.score - right.score)[0].index;
+      .sort((left, right) => left.score - right.score);
+    const bestIndex = ranked[0].index;
+    if (!shouldAvoidCandidate(chain[bestIndex])) {
+      return bestIndex;
+    }
+
+    const childCandidate = ranked.find(({ index }) => index < bestIndex && !shouldAvoidCandidate(chain[index]));
+    return childCandidate ? childCandidate.index : bestIndex;
   }
 
   function notifyCandidate() {

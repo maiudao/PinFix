@@ -8,6 +8,7 @@ function cssEscapeValue(value) {
 
 function captureElementRect(element) {
   const rect = element.getBoundingClientRect();
+  const documentSize = getDocumentSize();
 
   return {
     pageLeft: rect.left + window.scrollX,
@@ -15,8 +16,75 @@ function captureElementRect(element) {
     width: rect.width,
     height: rect.height,
     viewportWidth: window.innerWidth,
-    viewportHeight: window.innerHeight
+    viewportHeight: window.innerHeight,
+    documentWidth: documentSize.width,
+    documentHeight: documentSize.height
   };
+}
+
+function normaliseAnnotationRect(rect, minSize = 1) {
+  const documentSize = getDocumentSize();
+  const width = clamp(
+    Number(rect && rect.width) || minSize,
+    minSize,
+    Math.max(minSize, documentSize.width)
+  );
+  const height = clamp(
+    Number(rect && rect.height) || minSize,
+    minSize,
+    Math.max(minSize, documentSize.height)
+  );
+  const maxLeft = Math.max(0, documentSize.width - width);
+  const maxTop = Math.max(0, documentSize.height - height);
+
+  return {
+    pageLeft: clamp(Number(rect && rect.pageLeft) || 0, 0, maxLeft),
+    pageTop: clamp(Number(rect && rect.pageTop) || 0, 0, maxTop),
+    width,
+    height,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    documentWidth: documentSize.width,
+    documentHeight: documentSize.height
+  };
+}
+
+function createRelativeAnnotationRect(rect) {
+  if (!rect) {
+    return null;
+  }
+
+  const documentSize = getDocumentSize();
+  const baseWidth = Math.max(1, Number(rect.documentWidth) || documentSize.width || Number(rect.viewportWidth) || window.innerWidth || 1);
+  const baseHeight = Math.max(1, Number(rect.documentHeight) || documentSize.height || Number(rect.viewportHeight) || window.innerHeight || 1);
+
+  return {
+    leftRatio: clamp((Number(rect.pageLeft) || 0) / baseWidth, 0, 1),
+    topRatio: clamp((Number(rect.pageTop) || 0) / baseHeight, 0, 1),
+    widthRatio: clamp((Number(rect.width) || 0) / baseWidth, 0, 1),
+    heightRatio: clamp((Number(rect.height) || 0) / baseHeight, 0, 1),
+    documentWidth: baseWidth,
+    documentHeight: baseHeight
+  };
+}
+
+function resolveRelativeAnnotationRect(relativeRect, fallbackRect) {
+  if (!relativeRect) {
+    return fallbackRect ? normaliseAnnotationRect(fallbackRect) : null;
+  }
+
+  const documentSize = getDocumentSize();
+  const width = Math.max(1, documentSize.width);
+  const height = Math.max(1, documentSize.height);
+  const resolvedWidth = Math.max(1, Number(relativeRect.widthRatio) * width);
+  const resolvedHeight = Math.max(1, Number(relativeRect.heightRatio) * height);
+
+  return normaliseAnnotationRect({
+    pageLeft: Number(relativeRect.leftRatio) * width,
+    pageTop: Number(relativeRect.topRatio) * height,
+    width: resolvedWidth,
+    height: resolvedHeight
+  });
 }
 
 // Store both a CSS selector and a short text hint. The selector restores
@@ -108,8 +176,17 @@ function resolveAnnotationRect(annotation) {
     };
   }
 
+  if (!annotation.anchor) {
+    const relativeRect = annotation.relativeRect || createRelativeAnnotationRect(annotation.rect);
+    return {
+      rect: resolveRelativeAnnotationRect(relativeRect, annotation.rect),
+      relativeRect,
+      element: null
+    };
+  }
+
   return {
-    rect: annotation.anchor ? annotation.anchor.rect : annotation.rect,
+    rect: annotation.anchor ? annotation.anchor.rect : normaliseAnnotationRect(annotation.rect),
     element: null
   };
 }

@@ -36,7 +36,6 @@ const PINFIX_BOX_PADDING_OPTIONS = {
   wide: 12
 };
 
-const PINFIX_COUNTDOWN_OPTIONS = [3, 5, 10];
 const PINFIX_MIN_TOOL_TARGET_WIDTH = 132;
 const PINFIX_MIN_TOOL_TARGET_HEIGHT = 54;
 
@@ -50,6 +49,8 @@ const PINFIX_DEFAULT_SETTINGS = {
   contrastMode: 'auto',
   countdown: 5,
   notesVisible: true,
+  toolTheme: 'auto',
   launcherPosition: 'left-center',
+  launcherCustomPosition: null,
   lastTool: 'select'
 };

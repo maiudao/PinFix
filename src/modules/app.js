@@ -2,10 +2,8 @@ function createPinFixApp() {
   const i18n = createI18n();
   const storage = createStorage();
   let toastTimer = null;
-  let countdownTimer = null;
   let focusTimer = null;
   let refreshScheduled = false;
-  let lastScreenshotBlob = null;
   let captureInProgress = false;
   let lastUrl = storage.normaliseUrl(window.location.href);
   let routeWatcherAttached = false;
@@ -16,10 +14,8 @@ function createPinFixApp() {
     selectionMode: 'annotate',
     selectionActive: true,
     activePopover: null,
-    captureMode: false,
     captureHidden: false,
     areaCaptureActive: false,
-    countdownRemaining: 0,
     candidate: null,
     candidateElement: null,
     annotations: [],
@@ -28,7 +24,7 @@ function createPinFixApp() {
     selectedTemplateIds: [],
     globalNote: '',
     globalNoteOpen: false,
-    globalNoteHeight: 560,
+    globalNoteHeight: 420,
     globalNoteView: 'note',
     activeTemplateId: '',
     draftTemplate: null,
@@ -67,12 +63,14 @@ function createPinFixApp() {
     onFocusAnnotation: (id) => focusAnnotation(id),
     onEditAnnotation: (id) => editAnnotation(id),
     onMaskAnnotation: (id) => maskAnnotation(id),
+    onResizeAnnotation: (id, rect) => resizeAnnotation(id, rect),
     onAdjustMask: (id, delta) => adjustMask(id, delta),
     onToggleSection: (section) => toggleSection(section),
     onCandidateAdjust: (direction) => adjustCandidate(direction),
     onCandidatePick: (kind) => addCandidateSelection(kind),
     onChangeNote: (id, value, saveNow) => updateNote(id, value, saveNow),
     onChangeGlobalNote: (value) => updateGlobalNote(value),
+    onMoveLauncher: (position) => moveLauncher(position),
     onShowGlobalNoteView: () => showGlobalNoteView(),
     onShowGlobalTemplate: (id) => showGlobalTemplate(id),
     onCreateGlobalTemplate: () => createGlobalTemplateDraft(),
@@ -90,6 +88,7 @@ function createPinFixApp() {
     isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
     getSelectionMode: () => state.selectionMode,
     isSelectionActive: () => state.selectionActive && !state.globalNoteOpen && !state.areaCaptureActive,
+    shouldAvoidCandidate: (element) => hasExistingAnnotationForElement(element),
     onCandidateChange: ({ element }) => {
       if (state.globalNoteOpen || state.areaCaptureActive) {
         return;
@@ -127,7 +126,7 @@ function createPinFixApp() {
       render();
     },
     afterCapture: async () => {
-      state.captureHidden = state.captureMode;
+      state.captureHidden = false;
       render();
     }
   });
@@ -232,7 +231,7 @@ function createPinFixApp() {
   function loadPageData() {
     refreshTemplatesFromStorage();
     const pageData = storage.loadPageData(window.location.href);
-    const { launcherPosition, ...pageSettings } = pageData.pageSettings || {};
+    const { launcherPosition, launcherCustomPosition, ...pageSettings } = pageData.pageSettings || {};
     state.settings = {
       ...storage.loadGlobalSettings(),
       ...pageSettings
@@ -247,7 +246,7 @@ function createPinFixApp() {
     state.activeTemplateId = '';
     state.draftTemplate = null;
     state.globalNoteHeight = pageSettings.globalNoteHeight
-      ? Math.max(pageSettings.globalNoteHeight, 500)
+      ? Math.max(pageSettings.globalNoteHeight, 360)
       : state.globalNoteHeight;
     state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
   }
@@ -259,6 +258,7 @@ function createPinFixApp() {
       note: annotation.note || '',
       anchor: annotation.anchor || null,
       rect: annotation.rect || (annotation.anchor ? annotation.anchor.rect : null),
+      relativeRect: annotation.relativeRect || null,
       style: {
         colorPreset: annotation.style && annotation.style.colorPreset ? annotation.style.colorPreset : state.settings.colorPreset,
         lineWidth: annotation.style && annotation.style.lineWidth ? annotation.style.lineWidth : state.settings.lineWidth,
@@ -272,6 +272,9 @@ function createPinFixApp() {
     const resolved = resolveAnnotationRect(filled);
     if (resolved.rect) {
       filled.rect = resolved.rect;
+    }
+    if (!filled.anchor && resolved.relativeRect) {
+      filled.relativeRect = resolved.relativeRect;
     }
     if (resolved.element) {
       filled.surfaceTone = detectSurfaceTone(resolved.element, state.settings.contrastMode);
@@ -312,7 +315,6 @@ function createPinFixApp() {
         labelStyle: state.settings.labelStyle,
         boxPadding: state.settings.boxPadding,
         contrastMode: state.settings.contrastMode,
-        countdown: state.settings.countdown,
         notesVisible: state.settings.notesVisible,
         globalNoteHeight: state.globalNoteHeight
       }
@@ -330,7 +332,8 @@ function createPinFixApp() {
       message: translated === keyOrText ? keyOrText : translated,
       actionName: toastOptions.actionName || '',
       actionLabel: toastOptions.actionLabelKey ? i18n.t(getLanguage(), toastOptions.actionLabelKey) : '',
-      tone: toastOptions.tone || ''
+      tone: toastOptions.tone || '',
+      anchor: toastOptions.anchor || ''
     };
     render();
 
@@ -458,8 +461,46 @@ function createPinFixApp() {
   function findExistingAnnotation(anchor, rect) {
     return state.annotations.find((annotation) => {
       const sameSelector = anchor.selector && annotation.anchor && annotation.anchor.selector === anchor.selector;
-      return sameSelector || rectsRoughlyMatch(annotation.rect, rect);
+      return sameSelector || rectsRoughlyMatch(annotation.rect, rect) || rectsSubstantiallyMatch(annotation.rect, rect);
     }) || null;
+  }
+
+  function hasExistingAnnotation(anchor, rect) {
+    return Boolean(findExistingAnnotation(anchor, rect));
+  }
+
+  function hasExistingAnnotationForElement(element) {
+    if (!(element instanceof HTMLElement)) {
+      return false;
+    }
+
+    const rect = captureElementRect(element);
+    const selector = buildElementSelector(element);
+    return state.annotations.some((annotation) => {
+      const sameSelector = selector && annotation.anchor && annotation.anchor.selector === selector;
+      return sameSelector || rectsRoughlyMatch(annotation.rect, rect) || rectsSubstantiallyMatch(annotation.rect, rect);
+    });
+  }
+
+  function rectsSubstantiallyMatch(leftRect, rightRect) {
+    if (!leftRect || !rightRect) {
+      return false;
+    }
+
+    const leftArea = Math.max(1, leftRect.width * leftRect.height);
+    const rightArea = Math.max(1, rightRect.width * rightRect.height);
+    const sizeRatio = Math.min(leftArea, rightArea) / Math.max(leftArea, rightArea);
+    if (sizeRatio < 0.68) {
+      return false;
+    }
+
+    const overlapLeft = Math.max(leftRect.pageLeft, rightRect.pageLeft);
+    const overlapTop = Math.max(leftRect.pageTop, rightRect.pageTop);
+    const overlapRight = Math.min(leftRect.pageLeft + leftRect.width, rightRect.pageLeft + rightRect.width);
+    const overlapBottom = Math.min(leftRect.pageTop + leftRect.height, rightRect.pageTop + rightRect.height);
+    const overlapArea = Math.max(0, overlapRight - overlapLeft) * Math.max(0, overlapBottom - overlapTop);
+
+    return overlapArea / Math.min(leftArea, rightArea) > 0.82;
   }
 
   function hasExistingMask(anchor, rect) {
@@ -528,7 +569,9 @@ function createPinFixApp() {
       width: rect.width,
       height: rect.height,
       viewportWidth: rect.viewportWidth || window.innerWidth,
-      viewportHeight: rect.viewportHeight || window.innerHeight
+      viewportHeight: rect.viewportHeight || window.innerHeight,
+      documentWidth: rect.documentWidth || getDocumentSize().width,
+      documentHeight: rect.documentHeight || getDocumentSize().height
     };
     const existing = state.annotations.find((annotation) => rectsRoughlyMatch(annotation.rect, manualRect));
     if (existing) {
@@ -548,6 +591,7 @@ function createPinFixApp() {
       note: '',
       anchor: null,
       rect: manualRect,
+      relativeRect: createRelativeAnnotationRect(manualRect),
       surfaceTone: detectSurfaceTone(surfaceElement, state.settings.contrastMode),
       style: {
         colorPreset: state.settings.colorPreset,
@@ -564,6 +608,31 @@ function createPinFixApp() {
     state.settings.notesVisible = true;
     clearCandidate();
     saveGlobalSettings();
+    savePageData();
+    render();
+  }
+
+  function resizeAnnotation(id, rect) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation || !rect) {
+      return;
+    }
+
+    const nextRect = normaliseAnnotationRect(rect, 24);
+    if (rectsRoughlyMatch(annotation.rect, nextRect)) {
+      return;
+    }
+
+    takeHistorySnapshot();
+    annotation.anchor = null;
+    annotation.rect = nextRect;
+    annotation.relativeRect = createRelativeAnnotationRect(nextRect);
+    annotation.surfaceTone = detectSurfaceTone(getElementAtManualRectCenter(nextRect), state.settings.contrastMode);
+    state.activeAnnotationId = id;
+    if (state.editingAnnotationId && state.editingAnnotationId !== id) {
+      state.editingAnnotationId = '';
+    }
+    clearPendingActionConfirm();
     savePageData();
     render();
   }
@@ -886,7 +955,7 @@ function createPinFixApp() {
   }
 
   function clearPage() {
-    if (!window.confirm(i18n.t(getLanguage(), 'clearConfirm'))) {
+    if (!state.annotations.length && !state.masks.length && !state.globalNote && !state.selectedTemplateIds.length) {
       return;
     }
 
@@ -900,7 +969,10 @@ function createPinFixApp() {
     clearPendingActionConfirm();
     savePageData();
     render();
-    showToast('pageCleared');
+    showToast('pageClearedUndoHint', {
+      anchor: 'clear-page',
+      duration: 3600
+    });
   }
 
   function clearMasks() {
@@ -965,7 +1037,7 @@ function createPinFixApp() {
     }
     state.open = nextOpen;
     state.activePopover = null;
-    state.tool = state.settings.lastTool || 'select';
+    state.tool = getRestoredTool();
     setSelectionActive(true);
 
     if (nextOpen && state.tool === 'select') {
@@ -974,17 +1046,11 @@ function createPinFixApp() {
       selector.disable();
       state.selectionMode = 'annotate';
       if (!nextOpen) {
-        if (countdownTimer) {
-          window.clearInterval(countdownTimer);
-          countdownTimer = null;
-        }
         state.activeAnnotationId = '';
         state.editingAnnotationId = '';
         state.globalNoteOpen = false;
-        state.captureMode = false;
         state.captureHidden = false;
         state.areaCaptureActive = false;
-        state.countdownRemaining = 0;
         state.toast = '';
         setSelectionActive(false);
         clearCandidate();
@@ -994,9 +1060,28 @@ function createPinFixApp() {
     render();
   }
 
+  function getRestoredTool() {
+    if (state.settings.lastTool !== 'select') {
+      state.settings.lastTool = 'select';
+      saveGlobalSettings();
+    }
+    return 'select';
+  }
+
   function handleTool(tool) {
     if (!state.open) {
       state.open = true;
+    }
+
+    if (!['select', 'capture', 'copy'].includes(tool)) {
+      state.tool = 'select';
+      state.settings.lastTool = 'select';
+      state.activePopover = null;
+      setSelectionActive(true);
+      selector.enable();
+      saveGlobalSettings();
+      render();
+      return;
     }
 
     if (tool === 'copy') {
@@ -1005,15 +1090,9 @@ function createPinFixApp() {
     }
 
     if (tool === 'capture') {
-      selector.disable();
-      setSelectionActive(false);
-      clearCandidate();
-      state.tool = 'capture';
-      state.settings.lastTool = 'capture';
-      state.activePopover = state.activePopover === 'capture' ? null : 'capture';
-      state.areaCaptureActive = false;
+      state.settings.lastTool = 'select';
       saveGlobalSettings();
-      render();
+      startAreaCapture();
       return;
     }
 
@@ -1034,18 +1113,13 @@ function createPinFixApp() {
       return;
     }
 
-    selector.disable();
-    setSelectionActive(false);
-    state.tool = tool;
-    state.settings.lastTool = tool;
-    state.activePopover = state.activePopover === tool ? null : tool;
-    saveGlobalSettings();
-    render();
   }
 
   function updateSetting(key, value) {
-    const nextValue = key === 'countdown' ? Number(value) : value;
-    state.settings[key] = nextValue;
+    state.settings[key] = value;
+    if (key === 'launcherPosition' && value !== 'custom') {
+      state.settings.launcherCustomPosition = null;
+    }
     saveGlobalSettings();
     savePageData();
 
@@ -1054,6 +1128,17 @@ function createPinFixApp() {
       return;
     }
 
+    render();
+  }
+
+  function moveLauncher(position) {
+    if (!position) {
+      return;
+    }
+
+    state.settings.launcherPosition = 'custom';
+    state.settings.launcherCustomPosition = position;
+    saveGlobalSettings();
     render();
   }
 
@@ -1139,44 +1224,9 @@ function createPinFixApp() {
     }
   }
 
-  async function exportImage(preferClipboard) {
-    if (captureInProgress) {
-      return;
-    }
-
-    if (!confirmProceedWithIncompleteNotes(preferClipboard ? 'copy-image' : 'export-image')) {
-      return;
-    }
-
-    captureInProgress = true;
-    try {
-      const result = await exporters.exportViewportImage({
-        preferClipboard
-      });
-      lastScreenshotBlob = result.blob || null;
-      if (preferClipboard) {
-        showToast(result.copied ? 'copiedImage' : 'screenshotDownloadedFallback', {
-          duration: result.copied ? 1800 : 6500,
-          tone: result.copied ? '' : 'success'
-        });
-        return;
-      }
-
-      showToast('downloadedImage');
-    } catch (error) {
-      showToast(i18n.t(getLanguage(), 'exportLimit'));
-    } finally {
-      captureInProgress = false;
-    }
-  }
-
   function startAreaCapture() {
     if (!state.open) {
       state.open = true;
-    }
-
-    if (state.captureMode || countdownTimer) {
-      stopScreenshotMode(false);
     }
 
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -1191,9 +1241,11 @@ function createPinFixApp() {
     setSelectionActive(false);
     clearCandidate();
     state.tool = 'capture';
+    state.settings.lastTool = 'select';
     state.activePopover = null;
     state.globalNoteOpen = false;
     state.areaCaptureActive = true;
+    saveGlobalSettings();
     render();
   }
 
@@ -1204,6 +1256,8 @@ function createPinFixApp() {
 
     state.areaCaptureActive = false;
     state.tool = 'select';
+    state.settings.lastTool = 'select';
+    saveGlobalSettings();
     if (state.tool === 'select' && state.open) {
       setSelectionActive(true);
       selector.enable();
@@ -1235,7 +1289,9 @@ function createPinFixApp() {
     const deferredClipboard = exporters.createDeferredPngClipboardItem();
     state.areaCaptureActive = false;
     state.tool = 'select';
+    state.settings.lastTool = 'select';
     state.activePopover = null;
+    saveGlobalSettings();
     if (state.tool === 'select' && state.open) {
       setSelectionActive(true);
       selector.enable();
@@ -1250,15 +1306,9 @@ function createPinFixApp() {
         deferredClipboard,
         rect: selectedRect
       });
-      lastScreenshotBlob = result.blob || null;
 
       if (result.copied) {
-        showToast('screenshotCopiedPaste', {
-          actionName: 'save-last-screenshot',
-          actionLabelKey: 'saveLocally',
-          duration: 6500,
-          tone: 'success'
-        });
+        showToast('screenshotCopiedPaste', { duration: 6500, tone: 'success' });
         return;
       }
 
@@ -1274,58 +1324,6 @@ function createPinFixApp() {
     } finally {
       captureInProgress = false;
     }
-  }
-
-  function saveLastScreenshot() {
-    if (!lastScreenshotBlob) {
-      showToast('noRecentScreenshot');
-      return;
-    }
-
-    exporters.downloadBlob(lastScreenshotBlob, `pinfix-${Date.now()}.png`);
-    showToast('downloadedImage');
-  }
-
-  function stopScreenshotMode(notify) {
-    if (countdownTimer) {
-      window.clearInterval(countdownTimer);
-      countdownTimer = null;
-    }
-
-    state.captureMode = false;
-    state.captureHidden = false;
-    state.countdownRemaining = 0;
-    render();
-
-    if (notify) {
-      showToast('screenshotDone');
-    }
-  }
-
-  function startScreenshotMode() {
-    if (countdownTimer) {
-      window.clearInterval(countdownTimer);
-    }
-
-    if (!confirmProceedWithIncompleteNotes('screenshot-mode')) {
-      return;
-    }
-
-    state.activePopover = null;
-    state.captureMode = true;
-    state.captureHidden = true;
-    state.countdownRemaining = state.settings.countdown;
-    render();
-    showToast('screenshotReady');
-
-    countdownTimer = window.setInterval(() => {
-      state.countdownRemaining -= 1;
-      if (state.countdownRemaining <= 0) {
-        stopScreenshotMode(true);
-        return;
-      }
-      render();
-    }, 1000);
   }
 
   function runNamedAction(name) {
@@ -1357,22 +1355,6 @@ function createPinFixApp() {
     }
     if (name === 'clear-masks') {
       clearMasks();
-      return;
-    }
-    if (name === 'screenshot-mode') {
-      startScreenshotMode();
-      return;
-    }
-    if (name === 'export-image') {
-      exportImage(false);
-      return;
-    }
-    if (name === 'copy-image') {
-      exportImage(true);
-      return;
-    }
-    if (name === 'save-last-screenshot') {
-      saveLastScreenshot();
     }
   }
 
@@ -1406,18 +1388,6 @@ function createPinFixApp() {
       return;
     }
 
-    if (withCommand && withShift && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      startScreenshotMode();
-      return;
-    }
-
-    if (withCommand && withShift && event.key.toLowerCase() === 'e') {
-      event.preventDefault();
-      exportImage(false);
-      return;
-    }
-
     if (withCommand && withShift && event.key.toLowerCase() === 'h') {
       event.preventDefault();
       state.settings.notesVisible = !state.settings.notesVisible;
@@ -1431,11 +1401,6 @@ function createPinFixApp() {
     }
 
     if (event.key === 'Escape') {
-      if (state.captureMode) {
-        stopScreenshotMode(false);
-        return;
-      }
-
       if (state.activePopover) {
         state.activePopover = null;
         render();
@@ -1503,6 +1468,9 @@ function createPinFixApp() {
       ...state.settings,
       ...storage.loadGlobalSettings()
     };
+    if (state.settings.launcherPosition !== 'custom') {
+      state.settings.launcherCustomPosition = null;
+    }
     savePageData();
     refreshAnnotations(true);
   }

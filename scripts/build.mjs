@@ -199,6 +199,11 @@ async function buildBundle(parts) {
 }
 
 function wrapExtensionContentScript(content) {
+  const indentedContent = content.trimEnd()
+    .split('\n')
+    .map((line) => (line ? `    ${line}` : ''))
+    .join('\n');
+
   return `(() => {
   if (window.__pinfixExtensionBundleLoaded__) {
     return;
@@ -246,10 +251,7 @@ function wrapExtensionContentScript(content) {
   }
 
   const startPinFixBundle = () => {
-${content.trimEnd()
-    .split('\n')
-    .map((line) => `    ${line}`)
-    .join('\n')}
+${indentedContent}
   };
 
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {

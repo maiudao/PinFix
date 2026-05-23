@@ -5,7 +5,13 @@ const DEFAULT_SETTINGS = {
   colorPreset: 'red',
   lineWidth: 'medium',
   labelSize: 'medium',
+  labelStyle: 'solid',
+  boxPadding: 'normal',
+  contrastMode: 'auto',
+  notesVisible: true,
+  toolTheme: 'auto',
   launcherPosition: 'left-center',
+  launcherCustomPosition: null,
   autoShowEnabled: false,
   autoShowOrigins: []
 };
@@ -173,8 +179,16 @@ async function renderCurrentSite() {
 function render() {
   form.elements.language.value = settings.language;
   form.elements.launcherPosition.value = settings.launcherPosition;
+  if (!form.elements.launcherPosition.value) {
+    form.elements.launcherPosition.value = DEFAULT_SETTINGS.launcherPosition;
+  }
+  form.elements.toolTheme.value = settings.toolTheme;
   form.elements.lineWidth.value = settings.lineWidth;
   form.elements.labelSize.value = settings.labelSize;
+  form.elements.labelStyle.value = settings.labelStyle;
+  form.elements.boxPadding.value = settings.boxPadding;
+  form.elements.contrastMode.value = settings.contrastMode;
+  form.elements.notesVisible.checked = Boolean(settings.notesVisible);
   form.elements.autoShowEnabled.checked = Boolean(settings.autoShowEnabled);
   renderColorButtons();
   renderSiteList();
@@ -205,6 +219,9 @@ form.addEventListener('change', async (event) => {
   }
 
   settings[target.name] = target.type === 'checkbox' ? target.checked : target.value;
+  if (target.name === 'launcherPosition' && target.value !== 'custom') {
+    settings.launcherCustomPosition = null;
+  }
   await saveSettings();
 });
 

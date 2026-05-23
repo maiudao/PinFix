@@ -34,7 +34,22 @@
             <option value="left-center">左侧居中</option>
             <option value="right-center">右侧居中</option>
             <option value="right-bottom">右下角</option>
+            <option value="custom">跟随拖动位置</option>
           </select>
+        </label>
+
+        <label class="field">
+          <span>页面内工具主题</span>
+          <select name="toolTheme">
+            <option value="auto">自动跟随网页</option>
+            <option value="light">亮色</option>
+            <option value="dark">暗色</option>
+          </select>
+        </label>
+
+        <label class="toggle-row">
+          <input name="notesVisible" type="checkbox">
+          <span>默认显示备注输入框</span>
         </label>
       </section>
 
@@ -64,6 +79,57 @@
             </select>
           </label>
         </div>
+
+        <div class="two-column">
+          <label class="field">
+            <span>标签样式</span>
+            <select name="labelStyle">
+              <option value="solid">实心</option>
+              <option value="ring">描边</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>框线留白</span>
+            <select name="boxPadding">
+              <option value="tight">贴边</option>
+              <option value="compact">微留白</option>
+              <option value="normal">标准</option>
+              <option value="wide">宽松</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>页面亮暗策略</span>
+          <select name="contrastMode">
+            <option value="auto">自动判断</option>
+            <option value="light">按亮色网页处理</option>
+            <option value="dark">按暗色网页处理</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="settings-panel" aria-labelledby="shortcutTitle">
+        <h2 id="shortcutTitle">快捷键参考</h2>
+        <dl class="shortcut-list">
+          <div>
+            <dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd></dt>
+            <dd>撤销最近一次标注或遮挡</dd>
+          </div>
+          <div>
+            <dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></dt>
+            <dd>复制当前整理好的说明</dd>
+          </div>
+          <div>
+            <dt><kbd>Esc</kbd></dt>
+            <dd>关闭面板，或取消正在进行的框选</dd>
+          </div>
+          <div>
+            <dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd></dt>
+            <dd>显示或隐藏备注输入框</dd>
+          </div>
+        </dl>
       </section>
 
       <section class="settings-panel" aria-labelledby="autoTitle">
@@ -94,7 +160,6 @@
 
     <footer class="settings-footer">
       <a href="privacy.html" target="_blank" rel="noreferrer">隐私说明</a>
-      <a href="store-listing.zh-CN.md" target="_blank" rel="noreferrer">商店文案</a>
       <a href="donation.html" target="_blank" rel="noreferrer">支持作者</a>
     </footer>
 

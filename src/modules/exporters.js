@@ -1,6 +1,26 @@
 function createExporters(options) {
   const circledDigits = ['⓪', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫'];
 
+  function getCaptureRect(sourceRect) {
+    if (!sourceRect) {
+      return {
+        x: 0,
+        y: 0,
+        width: window.innerWidth,
+        height: window.innerHeight
+      };
+    }
+
+    const x = Math.max(0, Math.min(window.innerWidth, Number(sourceRect.x) || 0));
+    const y = Math.max(0, Math.min(window.innerHeight, Number(sourceRect.y) || 0));
+    return {
+      x,
+      y,
+      width: Math.max(1, Math.min(Number(sourceRect.width) || 0, window.innerWidth - x)),
+      height: Math.max(1, Math.min(Number(sourceRect.height) || 0, window.innerHeight - y))
+    };
+  }
+
   function formatBullet(number) {
     return circledDigits[number] || `${number}.`;
   }
@@ -94,6 +114,45 @@ function createExporters(options) {
     return new Blob([bytes], { type: mimeType || 'image/png' });
   }
 
+  function loadImageFromBlob(blob) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load screenshot image'));
+      };
+      image.src = url;
+    });
+  }
+
+  async function cropBlobToRect(blob, rect) {
+    const image = await loadImageFromBlob(blob);
+    const captureRect = getCaptureRect(rect);
+    const scaleX = image.naturalWidth / window.innerWidth;
+    const scaleY = image.naturalHeight / window.innerHeight;
+    const sourceX = Math.round(captureRect.x * scaleX);
+    const sourceY = Math.round(captureRect.y * scaleY);
+    const sourceWidth = Math.round(captureRect.width * scaleX);
+    const sourceHeight = Math.round(captureRect.height * scaleY);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, sourceWidth);
+    canvas.height = Math.max(1, sourceHeight);
+    const context = canvas.getContext('2d');
+    context.drawImage(image, sourceX, sourceY, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+
+    const croppedBlob = await canvasToPngBlob(canvas);
+    if (!croppedBlob) {
+      throw new Error('Failed to crop screenshot image');
+    }
+    return { canvas, blob: croppedBlob };
+  }
+
   async function tryCopyBlob(blob) {
     if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
       return false;
@@ -143,8 +202,7 @@ function createExporters(options) {
       !window.__pinfixExtensionMode__ ||
       typeof chrome === 'undefined' ||
       !chrome.runtime ||
-      !chrome.runtime.sendMessage ||
-      context.rect
+      !chrome.runtime.sendMessage
     ) {
       return null;
     }
@@ -158,9 +216,21 @@ function createExporters(options) {
         throw new Error(response && response.reason ? response.reason : 'Chrome screenshot failed');
       }
 
-      const blob = base64ToBlob(response.base64, response.mimeType);
+      const rawBlob = base64ToBlob(response.base64, response.mimeType);
+      const cropResult = context.rect ? await cropBlobToRect(rawBlob, context.rect) : null;
+      const blob = cropResult ? cropResult.blob : rawBlob;
       let copied = false;
-      if (context.preferClipboard) {
+      if (context.preferClipboard && context.deferredClipboard && context.deferredClipboard.resolveBlob) {
+        try {
+          context.deferredClipboard.resolveBlob(blob);
+          await context.deferredClipboard.copyPromise;
+          copied = true;
+        } catch (error) {
+          copied = false;
+        }
+      }
+
+      if (context.preferClipboard && !copied) {
         try {
           copied = await tryCopyBlob(blob);
         } catch (error) {
@@ -174,42 +244,39 @@ function createExporters(options) {
         downloaded = true;
       }
 
-      return { copied, downloaded, canvas: null, blob, nativeCapture: true };
+      return {
+        copied,
+        downloaded,
+        canvas: cropResult ? cropResult.canvas : null,
+        blob,
+        nativeCapture: true,
+        cropped: Boolean(cropResult)
+      };
     } finally {
       await options.afterCapture();
     }
   }
 
   async function exportViewportImage(context) {
-    const nativeResult = await captureWithChromeVisibleTab(context || {});
-    if (nativeResult) {
-      return nativeResult;
+    let nativeError = null;
+    try {
+      const nativeResult = await captureWithChromeVisibleTab(context || {});
+      if (nativeResult) {
+        return nativeResult;
+      }
+    } catch (error) {
+      nativeError = error;
     }
 
     if (typeof html2canvas !== 'function') {
-      throw new Error('html2canvas is not available');
+      throw nativeError || new Error('html2canvas is not available');
     }
 
     await options.beforeCapture();
     await sleep(60);
 
     try {
-      const sourceRect = context && context.rect ? context.rect : null;
-      const captureRect = sourceRect
-        ? {
-          x: Math.max(0, Math.min(window.innerWidth, Number(sourceRect.x) || 0)),
-          y: Math.max(0, Math.min(window.innerHeight, Number(sourceRect.y) || 0)),
-          width: Math.max(1, Math.min(window.innerWidth, Number(sourceRect.width) || 0)),
-          height: Math.max(1, Math.min(window.innerHeight, Number(sourceRect.height) || 0))
-        }
-        : {
-          x: 0,
-          y: 0,
-          width: window.innerWidth,
-          height: window.innerHeight
-        };
-      captureRect.width = Math.max(1, Math.min(captureRect.width, window.innerWidth - captureRect.x));
-      captureRect.height = Math.max(1, Math.min(captureRect.height, window.innerHeight - captureRect.y));
+      const captureRect = getCaptureRect(context && context.rect ? context.rect : null);
 
       const canvas = await html2canvas(document.documentElement, {
         backgroundColor: null,

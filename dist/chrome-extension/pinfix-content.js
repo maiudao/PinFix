@@ -48,7 +48,7 @@
     const PINFIX_VERSION = '1.0.0';
     const PINFIX_STORAGE_VERSION = 1;
     const PINFIX_Z_INDEX = 2147483000;
-    
+
     const PINFIX_COLOR_PRESETS = {
       red: { key: 'red', color: '#E11D2E' },
       orange: { key: 'orange', color: '#EA580C' },
@@ -58,35 +58,34 @@
       green: { key: 'green', color: '#16A34A' },
       neutral: { key: 'neutral', color: '#111827' }
     };
-    
+
     const PINFIX_LINE_WIDTHS = {
       thin: 2,
       medium: 4,
       thick: 6
     };
-    
+
     const PINFIX_LABEL_SIZES = {
       small: 34,
       medium: 40,
       large: 46
     };
-    
+
     const PINFIX_LABEL_STYLES = {
       solid: 'solid',
       ring: 'ring'
     };
-    
+
     const PINFIX_BOX_PADDING_OPTIONS = {
       tight: 0,
       compact: 4,
       normal: 8,
       wide: 12
     };
-    
-    const PINFIX_COUNTDOWN_OPTIONS = [3, 5, 10];
+
     const PINFIX_MIN_TOOL_TARGET_WIDTH = 132;
     const PINFIX_MIN_TOOL_TARGET_HEIGHT = 54;
-    
+
     const PINFIX_DEFAULT_SETTINGS = {
       language: 'auto',
       colorPreset: 'red',
@@ -97,28 +96,30 @@
       contrastMode: 'auto',
       countdown: 5,
       notesVisible: true,
+      toolTheme: 'auto',
       launcherPosition: 'left-center',
+      launcherCustomPosition: null,
       lastTool: 'select'
     };
-    
+
     function clamp(value, min, max) {
       return Math.min(Math.max(value, min), max);
     }
-    
+
     function sleep(ms) {
       return new Promise((resolve) => window.setTimeout(resolve, ms));
     }
-    
+
     function fillTemplate(template, values) {
       return String(template || '').replace(/\{(\w+)\}/g, (fullMatch, key) => {
         return Object.prototype.hasOwnProperty.call(values || {}, key) ? String(values[key]) : fullMatch;
       });
     }
-    
+
     function createId(prefix) {
       return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
     }
-    
+
     function escapeHtml(value) {
       return String(value)
         .replace(/&/g, '&amp;')
@@ -127,7 +128,7 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
-    
+
     function formatTimestamp(date, language) {
       try {
         return new Intl.DateTimeFormat(language === 'zh-CN' ? 'zh-CN' : 'en-US', {
@@ -142,7 +143,7 @@
         return date.toISOString();
       }
     }
-    
+
     function getViewportRect() {
       return {
         width: window.innerWidth,
@@ -151,17 +152,30 @@
         scrollY: window.scrollY
       };
     }
-    
+
     function getDocumentSize() {
       const doc = document.documentElement;
       const body = document.body;
-    
+      const pinfixRoot = document.getElementById('pinfix-root');
+      const previousDisplay = pinfixRoot ? pinfixRoot.style.display : '';
+
+      if (pinfixRoot) {
+        pinfixRoot.style.display = 'none';
+      }
+
+      const width = Math.max(doc.scrollWidth, doc.clientWidth, body ? body.scrollWidth : 0);
+      const height = Math.max(doc.scrollHeight, doc.clientHeight, body ? body.scrollHeight : 0);
+
+      if (pinfixRoot) {
+        pinfixRoot.style.display = previousDisplay;
+      }
+
       return {
-        width: Math.max(doc.scrollWidth, doc.clientWidth, body ? body.scrollWidth : 0),
-        height: Math.max(doc.scrollHeight, doc.clientHeight, body ? body.scrollHeight : 0)
+        width,
+        height
       };
     }
-    
+
     function expandRect(rect, padding) {
       const gap = Number(padding || 0);
       return {
@@ -171,12 +185,12 @@
         height: rect.height + gap * 2
       };
     }
-    
+
     function rectsRoughlyMatch(leftRect, rightRect) {
       if (!leftRect || !rightRect) {
         return false;
       }
-    
+
       const tolerance = 3;
       return (
         Math.abs(leftRect.pageLeft - rightRect.pageLeft) <= tolerance &&
@@ -185,42 +199,40 @@
         Math.abs(leftRect.height - rightRect.height) <= tolerance
       );
     }
-    
+
     function summariseNote(note) {
       const firstLine = String(note || '').trim().split(/\r?\n/)[0] || '';
       return firstLine.length > 48 ? `${firstLine.slice(0, 45)}...` : firstLine;
     }
-    
+
     function getBrowserLanguage() {
       return navigator.language && navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
     }
-    
+
     function isEditableTarget(target) {
       if (!target || !(target instanceof Element)) {
         return false;
       }
-    
+
       if (target.closest('[contenteditable="true"]')) {
         return true;
       }
-    
+
       return ['INPUT', 'TEXTAREA', 'SELECT', 'OPTION'].includes(target.tagName);
     }
-    
+
     function createI18n() {
       const messages = {
         'zh-CN': {
           launcherOpen: '打开点改',
           launcherClose: '关闭点改',
+          moveToolbar: '拖动工具栏',
           select: '选择',
           style: '样式',
           capture: '截图',
           copy: '复制',
           more: '更多',
-          screenshotMode: '截图准备',
-          exportImage: '保存当前画面',
-          copyImage: '复制图片',
-          saveLocally: '保存到本地',
+          saveLocally: '下载到本地',
           copyNotes: '复制文字',
           undo: '撤销上一步',
           clearPage: '清空本页',
@@ -287,7 +299,6 @@
           contrastAuto: '自动',
           contrastLight: '亮页',
           contrastDark: '暗页',
-          countdown: '倒计时',
           languageAuto: '跟随浏览器',
           languageZh: '简体中文',
           languageEn: 'English',
@@ -295,17 +306,12 @@
           restored: '已撤销上一步',
           copiedNotes: '文字已复制',
           copyFailed: '复制失败，请手动重试',
-          copiedImage: '图片已复制',
-          downloadedImage: '已下载 PNG 图片',
           screenshotCopiedPaste: '截图已复制，可以直接 Ctrl+V 粘贴',
           screenshotDownloadedFallback: '浏览器限制了图片复制，已自动保存 PNG',
-          noRecentScreenshot: '还没有可保存的最近截图',
           areaCaptureTitle: '拖动框选截图区域',
           areaCaptureHint: '按住鼠标左键拖动，松开后自动截图；Esc 或右键取消',
           areaCaptureTooSmall: '截图区域太小，请重新框选',
           areaCaptureCanceled: '已取消框选截图',
-          screenshotReady: '截图准备已开始',
-          screenshotDone: '截图准备已结束',
           focusDone: '已定位到对应标注',
           nothingToCopy: '还没有可复制的标注内容',
           clearConfirm: '确认清空当前页面的全部标注、修改要求、补充说明和隐私遮挡吗？清空后可用撤销恢复。',
@@ -317,6 +323,7 @@
           noteReadyShort: '已填写修改要求',
           noteMissingStatus: '待补充修改要求',
           pageCleared: '已清空当前页全部内容',
+          pageClearedUndoHint: '已清空，可按 Ctrl+Z 撤回',
           privacyMode: '隐私遮挡',
           privacyModeOn: '已进入遮挡模式，点击敏感区域即可生成遮挡',
           privacyModeOff: '已退出遮挡模式',
@@ -343,29 +350,25 @@
           viewportInfo: '浏览器视口',
           countInfo: '标注数量',
           timeInfo: '生成时间',
-          exportLimit: '复杂页面导出可能不完整，必要时请用截图准备配合系统截图',
+          exportLimit: '这个页面暂时无法截图，请尝试系统截图工具',
           tipShrink: '缩小选区',
           tipExpand: '扩大选区',
           tipSelectMode: '普通标注',
           tipMaskMode: '遮挡模式',
           hotkeyCopy: 'Ctrl/Cmd + Shift + C：复制文字',
-          hotkeyScreenshot: 'Ctrl/Cmd + Shift + S：截图准备',
-          hotkeyExport: 'Ctrl/Cmd + Shift + E：保存当前画面',
           hotkeyUndo: 'Ctrl/Cmd + Z：撤销上一步',
           hotkeyNotes: 'Ctrl/Cmd + Shift + H：显示或隐藏备注'
         },
         en: {
           launcherOpen: 'Open PinFix',
           launcherClose: 'Close PinFix',
+          moveToolbar: 'Move toolbar',
           select: 'Select',
           style: 'Style',
           capture: 'Capture',
           copy: 'Copy',
           more: 'More',
-          screenshotMode: 'Screenshot mode',
-          exportImage: 'Save current view',
-          copyImage: 'Copy image',
-          saveLocally: 'Save locally',
+          saveLocally: 'Download',
           copyNotes: 'Copy notes',
           undo: 'Undo',
           clearPage: 'Clear page',
@@ -432,7 +435,6 @@
           contrastAuto: 'Auto',
           contrastLight: 'Light page',
           contrastDark: 'Dark page',
-          countdown: 'Countdown',
           languageAuto: 'Browser default',
           languageZh: '简体中文',
           languageEn: 'English',
@@ -440,17 +442,12 @@
           restored: 'Undid the last action',
           copiedNotes: 'Notes copied',
           copyFailed: 'Copy failed. Please try again.',
-          copiedImage: 'Image copied',
-          downloadedImage: 'PNG downloaded',
           screenshotCopiedPaste: 'Screenshot copied. Press Ctrl+V to paste.',
           screenshotDownloadedFallback: 'Image copy was limited by the browser, so PinFix saved a PNG.',
-          noRecentScreenshot: 'No recent screenshot to save',
           areaCaptureTitle: 'Drag to capture an area',
           areaCaptureHint: 'Hold the left mouse button and drag. Release to capture. Esc or right-click cancels.',
           areaCaptureTooSmall: 'The selected area is too small. Please try again.',
           areaCaptureCanceled: 'Area capture canceled',
-          screenshotReady: 'Screenshot mode started',
-          screenshotDone: 'Screenshot mode ended',
           focusDone: 'Moved to the annotation',
           nothingToCopy: 'No annotations to copy yet',
           clearConfirm: 'Clear all annotations, change requests, more notes, and privacy masks on this page? You can undo it.',
@@ -462,6 +459,7 @@
           noteReadyShort: 'Change request written',
           noteMissingStatus: 'Needs a change request',
           pageCleared: 'All page data cleared',
+          pageClearedUndoHint: 'Cleared. Press Ctrl+Z to undo',
           privacyMode: 'Privacy mask',
           privacyModeOn: 'Privacy masking is on. Click sensitive areas to cover them.',
           privacyModeOff: 'Privacy masking is off',
@@ -488,19 +486,17 @@
           viewportInfo: 'Browser viewport',
           countInfo: 'Annotation count',
           timeInfo: 'Generated at',
-          exportLimit: 'Complex pages may export imperfectly. Use Screenshot mode with a system capture when needed.',
+          exportLimit: 'PinFix could not capture this page. Please try the system screenshot tool.',
           tipShrink: 'Shrink selection',
           tipExpand: 'Expand selection',
           tipSelectMode: 'Annotate mode',
           tipMaskMode: 'Mask mode',
           hotkeyCopy: 'Ctrl/Cmd + Shift + C: Copy notes',
-          hotkeyScreenshot: 'Ctrl/Cmd + Shift + S: Screenshot mode',
-          hotkeyExport: 'Ctrl/Cmd + Shift + E: Save current view',
           hotkeyUndo: 'Ctrl/Cmd + Z: Undo',
           hotkeyNotes: 'Ctrl/Cmd + Shift + H: Toggle notes'
         }
       };
-    
+
       return {
         resolveLanguage(languageSetting) {
           return languageSetting === 'auto' ? getBrowserLanguage() : languageSetting;
@@ -511,12 +507,12 @@
         }
       };
     }
-    
+
     function createStorage() {
       const globalKey = 'pinfix:global';
       const templateKey = 'pinfix:templates';
       const pageKeyPrefix = 'pinfix:page';
-    
+
       function hasExtensionStorage() {
         return Boolean(
           window.__pinfixExtensionMode__ &&
@@ -526,15 +522,15 @@
           chrome.storage.local
         );
       }
-    
+
       function getExtensionCache() {
         if (!window.__pinfixExtensionStorageCache__ || typeof window.__pinfixExtensionStorageCache__ !== 'object') {
           window.__pinfixExtensionStorageCache__ = {};
         }
-    
+
         return window.__pinfixExtensionStorageCache__;
       }
-    
+
       // Use a stable URL so dashboard pages with temporary query params
       // do not create a new save record every time a token changes.
       function normaliseUrl(urlValue) {
@@ -542,7 +538,7 @@
         const keepHash = url.hash && url.hash !== '#' ? url.hash : '';
         return `${url.origin}${url.pathname}${keepHash}`;
       }
-    
+
       function loadJson(key, fallback) {
         if (hasExtensionStorage()) {
           const cache = getExtensionCache();
@@ -553,7 +549,7 @@
               return fallback;
             }
           }
-    
+
           // Migrate old userscript page data when it is visible to the content script.
           // Keep the old localStorage copy so users can still go back to the userscript.
           const legacyPayload = loadLocalJson(key, null);
@@ -561,13 +557,13 @@
             saveJson(key, legacyPayload);
             return legacyPayload;
           }
-    
+
           return fallback;
         }
-    
+
         return loadLocalJson(key, fallback);
       }
-    
+
       function loadLocalJson(key, fallback) {
         try {
           const raw = window.localStorage.getItem(key);
@@ -576,7 +572,7 @@
           return fallback;
         }
       }
-    
+
       function saveJson(key, value) {
         if (hasExtensionStorage()) {
           const cache = getExtensionCache();
@@ -584,7 +580,7 @@
           chrome.storage.local.set({ [key]: value }).catch(() => false);
           return true;
         }
-    
+
         try {
           window.localStorage.setItem(key, JSON.stringify(value));
           return true;
@@ -592,7 +588,7 @@
           return false;
         }
       }
-    
+
       function removeJson(key) {
         if (hasExtensionStorage()) {
           const cache = getExtensionCache();
@@ -600,39 +596,39 @@
           chrome.storage.local.remove(key).catch(() => false);
           return;
         }
-    
+
         window.localStorage.removeItem(key);
       }
-    
+
       function parseStoredJson(raw, fallback) {
         if (!raw) {
           return fallback;
         }
-    
+
         if (typeof raw === 'object') {
           return raw;
         }
-    
+
         return JSON.parse(raw);
       }
-    
+
       function hasScriptStorage() {
         return typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
       }
-    
+
       function loadScriptJson(key, fallback) {
         try {
           if (!hasScriptStorage()) {
             return loadJson(key, fallback);
           }
-    
+
           const raw = GM_getValue(key, null);
           return parseStoredJson(raw, fallback);
         } catch (error) {
           return fallback;
         }
       }
-    
+
       function saveScriptJson(key, value) {
         const raw = JSON.stringify(value);
         if (hasScriptStorage()) {
@@ -643,19 +639,19 @@
             return { saved: saveJson(key, value), scope: 'local' };
           }
         }
-    
+
         return { saved: saveJson(key, value), scope: 'local' };
       }
-    
+
       function loadLegacyTemplatePayload() {
         const payload = loadJson(templateKey, null);
         if (!payload || payload.version !== PINFIX_STORAGE_VERSION || !Array.isArray(payload.templates)) {
           return null;
         }
-    
+
         return payload;
       }
-    
+
       function clearLegacyTemplates() {
         if (hasScriptStorage()) {
           try {
@@ -665,19 +661,19 @@
           }
         }
       }
-    
+
       function normaliseTemplates(templates) {
         const result = [];
         const existingIds = new Set();
         let changed = false;
         const now = Date.now();
-    
+
         (Array.isArray(templates) ? templates : []).forEach((template) => {
           if (!template || typeof template !== 'object') {
             changed = true;
             return;
           }
-    
+
           const title = typeof template.title === 'string' ? template.title : String(template.title || '');
           const content = typeof template.content === 'string' ? template.content : String(template.content || '');
           const createdAt = Number.isFinite(Number(template.createdAt)) ? Number(template.createdAt) : now;
@@ -704,22 +700,22 @@
           });
           existingIds.add(templateId);
         });
-    
+
         return { templates: result, changed };
       }
-    
+
       function mergeTemplates(primaryTemplates, legacyTemplates) {
         const normalised = normaliseTemplates(primaryTemplates);
         const result = [...normalised.templates];
         const existingIds = new Set(result.map((template) => template.id));
         const existingById = new Map(result.map((template) => [template.id, template]));
         let changed = normalised.changed;
-    
+
         (Array.isArray(legacyTemplates) ? legacyTemplates : []).forEach((template) => {
           if (!template || typeof template !== 'object') {
             return;
           }
-    
+
           const title = typeof template.title === 'string' ? template.title : String(template.title || '');
           const content = typeof template.content === 'string' ? template.content : String(template.content || '');
           const createdAt = Number.isFinite(Number(template.createdAt)) ? Number(template.createdAt) : Date.now();
@@ -728,7 +724,7 @@
           if (existingTemplate && existingTemplate.title === title && existingTemplate.content === content) {
             return;
           }
-    
+
           const templateId = template.id && !existingIds.has(template.id)
             ? template.id
             : createId('template');
@@ -744,15 +740,15 @@
           existingById.set(templateId, result[result.length - 1]);
           changed = true;
         });
-    
+
         return { templates: result, changed };
       }
-    
+
       function shouldMergeLegacyTemplates(scriptPayload, legacyPayload) {
         if (!hasScriptStorage() || !scriptPayload || !legacyPayload) {
           return true;
         }
-    
+
         const scriptSavedAt = Number(scriptPayload.savedAt || 0);
         const legacySavedAt = Number(legacyPayload.savedAt || 0);
         if (!scriptSavedAt) {
@@ -763,7 +759,7 @@
         }
         return legacySavedAt > scriptSavedAt;
       }
-    
+
       return {
         normaliseUrl,
         loadGlobalSettings() {
@@ -771,7 +767,7 @@
           if (!payload || payload.version !== PINFIX_STORAGE_VERSION) {
             return { ...PINFIX_DEFAULT_SETTINGS };
           }
-    
+
           return {
             ...PINFIX_DEFAULT_SETTINGS,
             ...payload.settings
@@ -797,7 +793,7 @@
               }
               return normalised.templates;
             }
-    
+
             const templatesToMerge = shouldMergeLegacyTemplates(payload, legacyPayload) ? legacyTemplates : [];
             const merged = mergeTemplates(currentTemplates, templatesToMerge);
             if (merged.changed) {
@@ -807,7 +803,7 @@
             }
             return merged.templates;
           }
-    
+
           if (legacyTemplates.length) {
             const normalised = normaliseTemplates(legacyTemplates);
             this.saveTemplates(normalised.templates);
@@ -838,7 +834,7 @@
               pageSettings: {}
             };
           }
-    
+
           return {
             annotations: Array.isArray(payload.annotations) ? payload.annotations : [],
             masks: Array.isArray(payload.masks) ? payload.masks : [],
@@ -865,7 +861,7 @@
         }
       };
     }
-    
+
     function createSelectorManager(options) {
       let enabled = false;
       let currentChain = [];
@@ -875,17 +871,26 @@
       let dragStart = null;
       let dragSelecting = false;
       let suppressNextClick = false;
+      let transparentOverlayDepth = 0;
       const dragSelectThreshold = 8;
       const minDragSelectSize = 24;
-    
+
       function isIgnoredElement(element) {
         return !element || options.isIgnored(element);
       }
-    
+
+      function isTransparentOverlayElement(element) {
+        return Boolean(
+          element &&
+          element.closest &&
+          element.closest('#pinfix-root .pinfix-annotation-box, #pinfix-root .pinfix-label')
+        );
+      }
+
       function isVisibleElement(element) {
         const rect = element.getBoundingClientRect();
         const style = window.getComputedStyle(element);
-    
+
         return (
           rect.width >= 8 &&
           rect.height >= 8 &&
@@ -894,28 +899,28 @@
           Number(style.opacity || '1') > 0
         );
       }
-    
+
       function hasVisibleBoxStyle(style) {
         const hasBackground = style.backgroundColor !== 'transparent'
           && style.backgroundColor !== 'rgba(0, 0, 0, 0)';
         return style.borderStyle !== 'none' || hasBackground || style.backgroundImage !== 'none';
       }
-    
+
       // The selector prefers blocks that look like real modules instead of
       // tiny text spans, but still keeps the full ancestor chain for [ and ].
       function isMeaningfulCandidate(element) {
         if (!element || !(element instanceof HTMLElement)) {
           return false;
         }
-    
+
         if (['HTML', 'BODY'].includes(element.tagName)) {
           return false;
         }
-    
+
         if (!isVisibleElement(element)) {
           return false;
         }
-    
+
         const rect = element.getBoundingClientRect();
         const area = rect.width * rect.height;
         const viewportArea = window.innerWidth * window.innerHeight;
@@ -923,72 +928,100 @@
         const interactive = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'].includes(element.tagName);
         const hasVisualBox = hasVisibleBoxStyle(style);
         const looksInline = style.display === 'inline' && !interactive;
-    
+
         if (rect.width > window.innerWidth * 0.98 && rect.height > window.innerHeight * 0.98) {
           return false;
         }
-    
+
         if (looksInline && area < 2200) {
           return false;
         }
-    
+
         return interactive || hasVisualBox || area > 3000 || element.children.length > 0;
       }
-    
+
       function collectChain(startElement) {
         const chain = [];
         let current = startElement;
-    
+
         while (current && current instanceof HTMLElement && current !== document.body) {
           if (!isIgnoredElement(current) && isMeaningfulCandidate(current)) {
             chain.push(current);
           }
           current = current.parentElement;
         }
-    
+
         return chain;
       }
-    
+
       function getSelectionMode() {
         return typeof options.getSelectionMode === 'function' ? options.getSelectionMode() : 'annotate';
       }
-    
+
       function isSelectionActive() {
         return typeof options.isSelectionActive === 'function' ? options.isSelectionActive() : true;
       }
-    
+
+      function shouldAvoidCandidate(element) {
+        if (typeof options.shouldAvoidCandidate !== 'function') {
+          return false;
+        }
+
+        try {
+          return Boolean(options.shouldAvoidCandidate(element));
+        } catch (error) {
+          return false;
+        }
+      }
+
       function getElementsAtPoint(point) {
         if (document.elementsFromPoint) {
           return document.elementsFromPoint(point.x, point.y).filter((item) => item instanceof HTMLElement);
         }
-    
+
         const single = document.elementFromPoint(point.x, point.y);
         return single instanceof HTMLElement ? [single] : [];
       }
-    
+
       // Saved PinFix overlays can sit above the page. In select mode we need the
       // first real page element under the pointer, not our own annotation chrome.
       function getSelectableTarget(point) {
         const stack = getElementsAtPoint(point);
+        const overlays = stack.filter((element) => isTransparentOverlayElement(element));
+        if (overlays.length && transparentOverlayDepth < 4) {
+          transparentOverlayDepth += 1;
+          overlays.forEach((element) => {
+            element.hidden = true;
+          });
+          try {
+            return getSelectableTarget(point);
+          } finally {
+            overlays.forEach((element) => {
+              element.hidden = false;
+            });
+            transparentOverlayDepth -= 1;
+          }
+        }
+
         return stack.find((element) => !isIgnoredElement(element) && isMeaningfulCandidate(element)) || null;
       }
-    
+
       function getElementArea(element) {
         const rect = element.getBoundingClientRect();
         return rect.width * rect.height;
       }
-    
+
       function isBroadContainer(element) {
         const rect = element.getBoundingClientRect();
         const viewportArea = window.innerWidth * window.innerHeight;
         const area = rect.width * rect.height;
-    
+
         return (
           area > viewportArea * 0.68 ||
           (rect.width > window.innerWidth * 0.92 && rect.height > window.innerHeight * 0.72)
         );
       }
-    
+
       function scoreDefaultCandidate(element, index) {
         const rect = element.getBoundingClientRect();
         const area = getElementArea(element);
@@ -999,52 +1032,59 @@
         const hasVisualBox = hasVisibleBoxStyle(style);
         const containerLike = element.children.length > 1 && ['DIV', 'SECTION', 'ARTICLE', 'LI'].includes(tagName);
         let score = index * 8;
-    
+
         if (interactive) {
           score -= 18;
         }
-    
+
         if (area < 1200 || rect.width < 20 || rect.height < 20) {
           score += interactive || hasVisualBox ? 6 : 36;
         }
-    
+
         if (hasVisualBox) {
           score -= 10;
         }
-    
+
         if (containerLike && area > 4200) {
           score += 16;
         }
-    
+
         if (area > viewportArea * 0.45) {
           score += 80;
         }
-    
+
         if (isBroadContainer(element)) {
           score += 160;
         }
-    
+
         if (['MAIN', 'HEADER', 'FOOTER'].includes(tagName)) {
           score += 80;
         }
-    
+
         if (style.display === 'inline' && !interactive) {
           score += 24;
         }
-    
+
         return score;
       }
-    
+
       function findDefaultIndex(chain) {
         if (!chain.length) {
           return 0;
         }
-    
-        return chain
+
+        const ranked = chain
           .map((element, index) => ({ index, score: scoreDefaultCandidate(element, index) }))
-          .sort((left, right) => left.score - right.score)[0].index;
+          .sort((left, right) => left.score - right.score);
+        const bestIndex = ranked[0].index;
+        if (!shouldAvoidCandidate(chain[bestIndex])) {
+          return bestIndex;
+        }
+
+        const childCandidate = ranked.find(({ index }) => index < bestIndex && !shouldAvoidCandidate(chain[index]));
+        return childCandidate ? childCandidate.index : bestIndex;
       }
-    
+
       function notifyCandidate() {
         const element = currentChain[currentIndex] || null;
         options.onCandidateChange({
@@ -1053,13 +1093,13 @@
           index: currentIndex
         });
       }
-    
+
       function createDragRect(point) {
         const left = Math.min(dragStart.pageX, point.pageX);
         const top = Math.min(dragStart.pageY, point.pageY);
         const right = Math.max(dragStart.pageX, point.pageX);
         const bottom = Math.max(dragStart.pageY, point.pageY);
-    
+
         return {
           pageLeft: left,
           pageTop: top,
@@ -1069,12 +1109,12 @@
           viewportHeight: window.innerHeight
         };
       }
-    
+
       function refreshFromPoint(point) {
         if (!enabled || !isSelectionActive() || !point) {
           return;
         }
-    
+
         const target = getSelectableTarget(point);
         if (!target) {
           currentChain = [];
@@ -1082,7 +1122,7 @@
           notifyCandidate();
           return;
         }
-    
+
         const chain = collectChain(target);
         const currentElement = currentChain[currentIndex] || null;
         currentChain = chain;
@@ -1094,12 +1134,12 @@
         }
         notifyCandidate();
       }
-    
+
       function handlePointerMove(event) {
         if (!isSelectionActive()) {
           return;
         }
-    
+
         lastPoint = { x: event.clientX, y: event.clientY };
         if (dragStart && event.pointerId === dragStart.pointerId) {
           const point = {
@@ -1107,7 +1147,7 @@
             pageY: event.pageY
           };
           const distance = Math.hypot(event.clientX - dragStart.clientX, event.clientY - dragStart.clientY);
-    
+
           if (dragSelecting || distance >= dragSelectThreshold) {
             if (!dragSelecting && window.getSelection) {
               const selection = window.getSelection();
@@ -1127,16 +1167,16 @@
             return;
           }
         }
-    
+
         refreshFromPoint(lastPoint);
       }
-    
+
       function stopSelectionEvent(event) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
       }
-    
+
       function clearDragSelect(notify = true) {
         dragStart = null;
         dragSelecting = false;
@@ -1144,7 +1184,7 @@
           options.onDragSelectChange(null);
         }
       }
-    
+
       function handlePointerDown(event) {
         if (
           !enabled ||
@@ -1157,7 +1197,7 @@
         ) {
           return;
         }
-    
+
         dragStart = {
           pointerId: event.pointerId,
           clientX: event.clientX,
@@ -1167,125 +1207,125 @@
         };
         dragSelecting = false;
       }
-    
+
       function handlePointerUp(event) {
         if (!dragStart || event.pointerId !== dragStart.pointerId) {
           return;
         }
-    
+
         if (!dragSelecting) {
           clearDragSelect(false);
           return;
         }
-    
+
         const rect = createDragRect({
           pageX: event.pageX,
           pageY: event.pageY
         });
         clearDragSelect(false);
         stopSelectionEvent(event);
-    
+
         if (rect.width >= minDragSelectSize && rect.height >= minDragSelectSize && typeof options.onAreaSelect === 'function') {
           options.onAreaSelect(rect);
         } else if (typeof options.onDragSelectChange === 'function') {
           options.onDragSelectChange(null);
         }
       }
-    
+
       function handlePointerCancel(event) {
         if (!dragStart || event.pointerId !== dragStart.pointerId) {
           return;
         }
-    
+
         if (dragSelecting) {
           stopSelectionEvent(event);
         }
         suppressNextClick = false;
         clearDragSelect(true);
       }
-    
+
       function handleClick(event) {
         if (suppressNextClick) {
           suppressNextClick = false;
           stopSelectionEvent(event);
           return;
         }
-    
+
         if (!enabled || !isSelectionActive() || getSelectionMode() !== 'mask') {
           return;
         }
-    
+
         if (isIgnoredElement(event.target)) {
           return;
         }
-    
+
         lastPoint = { x: event.clientX, y: event.clientY };
         refreshFromPoint(lastPoint);
         stopSelectionEvent(event);
-    
+
         const element = currentChain[currentIndex];
         if (!element) {
           return;
         }
-    
+
         options.onSelect(element);
         manualIndexLocked = false;
       }
-    
+
       function handleContextMenu(event) {
         if (!enabled || !isSelectionActive() || getSelectionMode() === 'mask') {
           return;
         }
-    
+
         if (isIgnoredElement(event.target)) {
           return;
         }
-    
+
         lastPoint = { x: event.clientX, y: event.clientY };
         refreshFromPoint(lastPoint);
         stopSelectionEvent(event);
-    
+
         const element = currentChain[currentIndex];
         if (!element) {
           return;
         }
-    
+
         options.onSelect(element);
         manualIndexLocked = false;
       }
-    
+
       function adjustSelection(direction) {
         if (!currentChain.length) {
           return;
         }
-    
+
         currentIndex = clamp(currentIndex + direction, 0, currentChain.length - 1);
         manualIndexLocked = true;
         notifyCandidate();
       }
-    
+
       function handleKeydown(event) {
         if (!enabled || !isSelectionActive() || isEditableTarget(event.target)) {
           return;
         }
-    
+
         if (event.key === '[') {
           event.preventDefault();
           adjustSelection(-1);
         }
-    
+
         if (event.key === ']') {
           event.preventDefault();
           adjustSelection(1);
         }
       }
-    
+
       return {
         enable() {
           if (enabled) {
             return;
           }
-    
+
           enabled = true;
           window.addEventListener('pointerdown', handlePointerDown, true);
           window.addEventListener('pointermove', handlePointerMove, true);
@@ -1294,7 +1334,7 @@
           window.addEventListener('click', handleClick, true);
           window.addEventListener('contextmenu', handleContextMenu, true);
           window.addEventListener('keydown', handleKeydown, true);
-    
+
           if (lastPoint) {
             refreshFromPoint(lastPoint);
           }
@@ -1303,7 +1343,7 @@
           if (!enabled) {
             return;
           }
-    
+
           enabled = false;
           currentChain = [];
           currentIndex = 0;
@@ -1333,28 +1373,96 @@
         }
       };
     }
-    
+
     function cssEscapeValue(value) {
       if (window.CSS && typeof window.CSS.escape === 'function') {
         return window.CSS.escape(value);
       }
-    
+
       return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
     }
-    
+
     function captureElementRect(element) {
       const rect = element.getBoundingClientRect();
-    
+      const documentSize = getDocumentSize();
+
       return {
         pageLeft: rect.left + window.scrollX,
         pageTop: rect.top + window.scrollY,
         width: rect.width,
         height: rect.height,
         viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight
+        viewportHeight: window.innerHeight,
+        documentWidth: documentSize.width,
+        documentHeight: documentSize.height
       };
     }
-    
+
+    function normaliseAnnotationRect(rect, minSize = 1) {
+      const documentSize = getDocumentSize();
+      const width = clamp(
+        Number(rect && rect.width) || minSize,
+        minSize,
+        Math.max(minSize, documentSize.width)
+      );
+      const height = clamp(
+        Number(rect && rect.height) || minSize,
+        minSize,
+        Math.max(minSize, documentSize.height)
+      );
+      const maxLeft = Math.max(0, documentSize.width - width);
+      const maxTop = Math.max(0, documentSize.height - height);
+
+      return {
+        pageLeft: clamp(Number(rect && rect.pageLeft) || 0, 0, maxLeft),
+        pageTop: clamp(Number(rect && rect.pageTop) || 0, 0, maxTop),
+        width,
+        height,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        documentWidth: documentSize.width,
+        documentHeight: documentSize.height
+      };
+    }
+
+    function createRelativeAnnotationRect(rect) {
+      if (!rect) {
+        return null;
+      }
+
+      const documentSize = getDocumentSize();
+      const baseWidth = Math.max(1, Number(rect.documentWidth) || documentSize.width || Number(rect.viewportWidth) || window.innerWidth || 1);
+      const baseHeight = Math.max(1, Number(rect.documentHeight) || documentSize.height || Number(rect.viewportHeight) || window.innerHeight || 1);
+
+      return {
+        leftRatio: clamp((Number(rect.pageLeft) || 0) / baseWidth, 0, 1),
+        topRatio: clamp((Number(rect.pageTop) || 0) / baseHeight, 0, 1),
+        widthRatio: clamp((Number(rect.width) || 0) / baseWidth, 0, 1),
+        heightRatio: clamp((Number(rect.height) || 0) / baseHeight, 0, 1),
+        documentWidth: baseWidth,
+        documentHeight: baseHeight
+      };
+    }
+
+    function resolveRelativeAnnotationRect(relativeRect, fallbackRect) {
+      if (!relativeRect) {
+        return fallbackRect ? normaliseAnnotationRect(fallbackRect) : null;
+      }
+
+      const documentSize = getDocumentSize();
+      const width = Math.max(1, documentSize.width);
+      const height = Math.max(1, documentSize.height);
+      const resolvedWidth = Math.max(1, Number(relativeRect.widthRatio) * width);
+      const resolvedHeight = Math.max(1, Number(relativeRect.heightRatio) * height);
+
+      return normaliseAnnotationRect({
+        pageLeft: Number(relativeRect.leftRatio) * width,
+        pageTop: Number(relativeRect.topRatio) * height,
+        width: resolvedWidth,
+        height: resolvedHeight
+      });
+    }
+
     // Store both a CSS selector and a short text hint. The selector restores
     // cleanly on most pages, while the text hint helps when the structure moves.
     function buildElementAnchor(element) {
@@ -1368,15 +1476,15 @@
         rect: captureElementRect(element)
       };
     }
-    
+
     function buildElementSelector(element) {
       if (element.id) {
         return `#${cssEscapeValue(element.id)}`;
       }
-    
+
       const parts = [];
       let current = element;
-    
+
       while (current && current instanceof HTMLElement && current !== document.body) {
         const tag = current.tagName.toLowerCase();
         const parent = current.parentElement;
@@ -1385,12 +1493,12 @@
           .slice(0, 2)
           .map((item) => `.${cssEscapeValue(item)}`)
           .join('');
-    
+
         if (!parent) {
           parts.unshift(tag);
           break;
         }
-    
+
         const siblings = Array.from(parent.children).filter(
           (child) => child.tagName === current.tagName
         );
@@ -1398,15 +1506,15 @@
         parts.unshift(`${tag}${className}:nth-of-type(${index})`);
         current = parent;
       }
-    
+
       return parts.join(' > ');
     }
-    
+
     function findElementFromAnchor(anchor) {
       if (!anchor) {
         return null;
       }
-    
+
       if (anchor.selector) {
         try {
           const direct = document.querySelector(anchor.selector);
@@ -1417,7 +1525,7 @@
           // Ignore invalid selectors from older saved data.
         }
       }
-    
+
       if (anchor.tagName && anchor.text) {
         const candidates = Array.from(document.getElementsByTagName(anchor.tagName));
         const match = candidates.find((element) => {
@@ -1426,15 +1534,15 @@
             .trim();
           return text && anchor.text && text.includes(anchor.text.slice(0, 24));
         });
-    
+
         if (match) {
           return match;
         }
       }
-    
+
       return null;
     }
-    
+
     function resolveAnnotationRect(annotation) {
       const anchorElement = findElementFromAnchor(annotation.anchor);
       if (anchorElement) {
@@ -1443,26 +1551,35 @@
           element: anchorElement
         };
       }
-    
+
+      if (!annotation.anchor) {
+        const relativeRect = annotation.relativeRect || createRelativeAnnotationRect(annotation.rect);
+        return {
+          rect: resolveRelativeAnnotationRect(relativeRect, annotation.rect),
+          relativeRect,
+          element: null
+        };
+      }
+
       return {
-        rect: annotation.anchor ? annotation.anchor.rect : annotation.rect,
+        rect: annotation.anchor ? annotation.anchor.rect : normaliseAnnotationRect(annotation.rect),
         element: null
       };
     }
-    
+
     function parseRgbColor(colorValue) {
       const value = String(colorValue || '').trim();
       const rgbMatch = value.match(/rgba?\(([^)]+)\)/i);
-    
+
       if (!rgbMatch) {
         return null;
       }
-    
+
       const parts = rgbMatch[1].split(',').map((item) => Number(item.trim()));
       if (parts.length < 3) {
         return null;
       }
-    
+
       return {
         r: parts[0],
         g: parts[1],
@@ -1470,7 +1587,7 @@
         a: parts[3] == null ? 1 : parts[3]
       };
     }
-    
+
     function luminanceFromRgb(rgb) {
       const channels = [rgb.r, rgb.g, rgb.b].map((value) => {
         const normalised = value / 255;
@@ -1478,19 +1595,19 @@
           ? normalised / 12.92
           : ((normalised + 0.055) / 1.055) ** 2.4;
       });
-    
+
       return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
     }
-    
+
     function detectSurfaceTone(element, contrastMode) {
       if (contrastMode === 'light') {
         return 'light';
       }
-    
+
       if (contrastMode === 'dark') {
         return 'dark';
       }
-    
+
       let current = element;
       while (current && current instanceof HTMLElement) {
         const computedStyle = window.getComputedStyle(current);
@@ -1500,19 +1617,19 @@
         }
         current = current.parentElement;
       }
-    
+
       const textRgb = parseRgbColor(window.getComputedStyle(element).color);
       if (textRgb) {
         return luminanceFromRgb(textRgb) > 0.55 ? 'dark' : 'light';
       }
-    
+
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
-    
+
     function getAnnotationReviewSummary(annotations, masks) {
       const missingAnnotations = annotations.filter((annotation) => !String(annotation.note || '').trim());
       const missingNumbers = missingAnnotations.map((annotation) => annotation.number);
-    
+
       return {
         annotationCount: annotations.length,
         maskCount: masks.length,
@@ -1521,7 +1638,7 @@
         ready: missingNumbers.length === 0
       };
     }
-    
+
     /*!
      * html2canvas 1.4.1 <https://html2canvas.hertzen.com>
      * Copyright (c) 2022 Niklas von Hertzen <https://hertzen.com>
@@ -1530,10 +1647,10 @@
     !function(A,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define(e):(A="undefined"!=typeof globalThis?globalThis:A||self).html2canvas=e()}(this,function(){"use strict";
     /*! *****************************************************************************
         Copyright (c) Microsoft Corporation.
-    
+
         Permission to use, copy, modify, and/or distribute this software for any
         purpose with or without fee is hereby granted.
-    
+
         THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
         REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
         AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -1690,14 +1807,34 @@
     if(!(t=e.defaultView))throw new Error("Document is not attached to a Window");return w={allowTaint:null!==(U=F.allowTaint)&&void 0!==U&&U,imageTimeout:null!==(c=F.imageTimeout)&&void 0!==c?c:15e3,proxy:F.proxy,useCORS:null!==(a=F.useCORS)&&void 0!==a&&a},U=h({logging:null===(g=F.logging)||void 0===g||g,cache:F.cache},w),c={windowWidth:null!==(c=F.windowWidth)&&void 0!==c?c:t.innerWidth,windowHeight:null!==(a=F.windowHeight)&&void 0!==a?a:t.innerHeight,scrollX:null!==(g=F.scrollX)&&void 0!==g?g:t.pageXOffset,scrollY:null!==(w=F.scrollY)&&void 0!==w?w:t.pageYOffset},a=new d(c.scrollX,c.scrollY,c.windowWidth,c.windowHeight),g=new Ps(U,a),c=null!==(w=F.foreignObjectRendering)&&void 0!==w&&w,w={allowTaint:null!==(U=F.allowTaint)&&void 0!==U&&U,onclone:F.onclone,ignoreElements:F.ignoreElements,inlineImages:c,copyStyles:c},g.logger.debug("Starting document clone with size "+a.width+"x"+a.height+" scrolled to "+-a.left+","+-a.top),U=new dn(g,u,w),(w=U.clonedReferenceElement)?[4,U.toIFrame(e,a)]:[2,Promise.reject("Unable to find element in cloned iframe")];case 1:return(r=A.sent(),l=jB(w)||"HTML"===w.tagName?function(A){var e=A.body,t=A.documentElement;if(!e||!t)throw new Error("Unable to get document size");A=Math.max(Math.max(e.scrollWidth,t.scrollWidth),Math.max(e.offsetWidth,t.offsetWidth),Math.max(e.clientWidth,t.clientWidth)),t=Math.max(Math.max(e.scrollHeight,t.scrollHeight),Math.max(e.offsetHeight,
     t.offsetHeight),Math.max(e.clientHeight,t.clientHeight));return new d(0,0,A,t)}(w.ownerDocument):f(g,w),B=l.width,n=l.height,s=l.left,o=l.top,i=Ys(g,w,F.backgroundColor),l={canvas:F.canvas,backgroundColor:i,scale:null!==(l=null!==(l=F.scale)&&void 0!==l?l:t.devicePixelRatio)&&void 0!==l?l:1,x:(null!==(l=F.x)&&void 0!==l?l:0)+s,y:(null!==(l=F.y)&&void 0!==l?l:0)+o,width:null!==(l=F.width)&&void 0!==l?l:Math.ceil(B),height:null!==(l=F.height)&&void 0!==l?l:Math.ceil(n)},c)?(g.logger.debug("Document cloned, using foreign object rendering"),[4,new Os(g,l).render(w)]):[3,3];case 2:return Q=A.sent(),[3,5];case 3:return g.logger.debug("Document cloned, element located at "+s+","+o+" with size "+B+"x"+n+" using computed rendering"),g.logger.debug("Starting DOM parsing"),C=kB(g,w),i===C.styles.backgroundColor&&(C.styles.backgroundColor=Le.TRANSPARENT),g.logger.debug("Starting renderer for element at "+l.x+","+l.y+" with size "+l.width+"x"+l.height),[4,new bs(g,l).render(C)];case 4:Q=A.sent(),A.label=5;case 5:return null!==(C=F.removeContainer)&&void 0!==C&&!C||dn.destroy(r)||g.logger.error("Cannot detach cloned iframe as it is not in the DOM anymore"),g.logger.debug("Finished rendering"),[2,Q]}})})},Ys=function(A,e,t){var r=e.ownerDocument,B=r.documentElement?fe(A,getComputedStyle(r.documentElement).backgroundColor):Le.TRANSPARENT,n=r.body?fe(A,getComputedStyle(r.body).backgroundColor):Le.TRANSPARENT,
     t="string"==typeof t?fe(A,t):null===t?Le.TRANSPARENT:4294967295;return e===r.documentElement?oe(B)?oe(n)?t:n:B:t};return function(A,e){return Js(A,e=void 0===e?{}:e)}});
-    
+
     function createExporters(options) {
       const circledDigits = ['⓪', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫'];
-    
+
+      function getCaptureRect(sourceRect) {
+        if (!sourceRect) {
+          return {
+            x: 0,
+            y: 0,
+            width: window.innerWidth,
+            height: window.innerHeight
+          };
+        }
+
+        const x = Math.max(0, Math.min(window.innerWidth, Number(sourceRect.x) || 0));
+        const y = Math.max(0, Math.min(window.innerHeight, Number(sourceRect.y) || 0));
+        return {
+          x,
+          y,
+          width: Math.max(1, Math.min(Number(sourceRect.width) || 0, window.innerWidth - x)),
+          height: Math.max(1, Math.min(Number(sourceRect.height) || 0, window.innerHeight - y))
+        };
+      }
+
       function formatBullet(number) {
         return circledDigits[number] || `${number}.`;
       }
-    
+
       function buildMarkdown(context) {
         const {
           language,
@@ -1706,36 +1843,36 @@
           businessNote = context.globalNote
         } = context;
         const lines = [];
-    
+
         lines.push(`${i18n.t(language, 'pageTitle')}：${document.title}`);
         lines.push(`${i18n.t(language, 'pageUrl')}：${window.location.href}`);
         lines.push(i18n.t(language, 'viewportMode'));
         lines.push('');
         lines.push(`${i18n.t(language, 'changeDetails')}：`);
         lines.push('');
-    
+
         annotations.forEach((annotation) => {
           lines.push(`${formatBullet(annotation.number)}：`);
           lines.push(annotation.note ? annotation.note.trim() : '-');
           lines.push('');
         });
-    
+
         lines.push(`${i18n.t(language, 'businessNote')}：`);
         lines.push(businessNote ? businessNote.trim() : '-');
         lines.push('');
         lines.push(`${i18n.t(language, 'extraInfo')}：`);
         lines.push(`- ${i18n.t(language, 'viewportInfo')}：${window.innerWidth} x ${window.innerHeight}`);
         lines.push(`- ${i18n.t(language, 'countInfo')}：${annotations.length}`);
-    
+
         return lines.join('\n');
       }
-    
+
       async function copyNotes(context) {
         const markdown = buildMarkdown(context);
         await copyTextWithFallback(markdown);
         return markdown;
       }
-    
+
       async function copyTextWithFallback(text) {
         try {
           await navigator.clipboard.writeText(text);
@@ -1750,18 +1887,18 @@
           document.body.appendChild(textarea);
           textarea.focus();
           textarea.select();
-    
+
           const copied = document.execCommand('copy');
           textarea.remove();
-    
+
           if (!copied) {
             throw error;
           }
-    
+
           return true;
         }
       }
-    
+
       function downloadBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1770,140 +1907,187 @@
         link.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
-    
+
       function canvasToPngBlob(canvas) {
         return new Promise((resolve) => {
           canvas.toBlob(resolve, 'image/png');
         });
       }
-    
+
       function base64ToBlob(base64, mimeType) {
         const binary = atob(base64);
         const bytes = new Uint8Array(binary.length);
         for (let index = 0; index < binary.length; index += 1) {
           bytes[index] = binary.charCodeAt(index);
         }
-    
+
         return new Blob([bytes], { type: mimeType || 'image/png' });
       }
-    
+
+      function loadImageFromBlob(blob) {
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(blob);
+          const image = new Image();
+          image.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(image);
+          };
+          image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load screenshot image'));
+          };
+          image.src = url;
+        });
+      }
+
+      async function cropBlobToRect(blob, rect) {
+        const image = await loadImageFromBlob(blob);
+        const captureRect = getCaptureRect(rect);
+        const scaleX = image.naturalWidth / window.innerWidth;
+        const scaleY = image.naturalHeight / window.innerHeight;
+        const sourceX = Math.round(captureRect.x * scaleX);
+        const sourceY = Math.round(captureRect.y * scaleY);
+        const sourceWidth = Math.round(captureRect.width * scaleX);
+        const sourceHeight = Math.round(captureRect.height * scaleY);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, sourceWidth);
+        canvas.height = Math.max(1, sourceHeight);
+        const context = canvas.getContext('2d');
+        context.drawImage(image, sourceX, sourceY, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+
+        const croppedBlob = await canvasToPngBlob(canvas);
+        if (!croppedBlob) {
+          throw new Error('Failed to crop screenshot image');
+        }
+        return { canvas, blob: croppedBlob };
+      }
+
       async function tryCopyBlob(blob) {
         if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
           return false;
         }
-    
+
         if (!blob) {
           return false;
         }
-    
+
         await navigator.clipboard.write([
           new ClipboardItem({
             'image/png': blob
           })
         ]);
-    
+
         return true;
       }
-    
+
       function createDeferredPngClipboardItem() {
         if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
           return null;
         }
-    
+
         let resolveBlob;
         let rejectBlob;
         const blobPromise = new Promise((resolve, reject) => {
           resolveBlob = resolve;
           rejectBlob = reject;
         });
-    
+
         const copyPromise = navigator.clipboard.write([
           new ClipboardItem({
             'image/png': blobPromise
           })
         ]);
         copyPromise.catch(() => false);
-    
+
         return {
           copyPromise,
           resolveBlob,
           rejectBlob
         };
       }
-    
+
       async function captureWithChromeVisibleTab(context) {
         if (
           !window.__pinfixExtensionMode__ ||
           typeof chrome === 'undefined' ||
           !chrome.runtime ||
-          !chrome.runtime.sendMessage ||
-          context.rect
+          !chrome.runtime.sendMessage
         ) {
           return null;
         }
-    
+
         await options.beforeCapture();
         await sleep(80);
-    
+
         try {
           const response = await chrome.runtime.sendMessage({ type: 'PINFIX_CAPTURE_VISIBLE_TAB' });
           if (!response || !response.ok || !response.base64) {
             throw new Error(response && response.reason ? response.reason : 'Chrome screenshot failed');
           }
-    
-          const blob = base64ToBlob(response.base64, response.mimeType);
+
+          const rawBlob = base64ToBlob(response.base64, response.mimeType);
+          const cropResult = context.rect ? await cropBlobToRect(rawBlob, context.rect) : null;
+          const blob = cropResult ? cropResult.blob : rawBlob;
           let copied = false;
-          if (context.preferClipboard) {
+          if (context.preferClipboard && context.deferredClipboard && context.deferredClipboard.resolveBlob) {
+            try {
+              context.deferredClipboard.resolveBlob(blob);
+              await context.deferredClipboard.copyPromise;
+              copied = true;
+            } catch (error) {
+              copied = false;
+            }
+          }
+
+          if (context.preferClipboard && !copied) {
             try {
               copied = await tryCopyBlob(blob);
             } catch (error) {
               copied = false;
             }
           }
-    
+
           let downloaded = false;
           if (!copied) {
             downloadBlob(blob, `pinfix-${Date.now()}.png`);
             downloaded = true;
           }
-    
-          return { copied, downloaded, canvas: null, blob, nativeCapture: true };
+
+          return {
+            copied,
+            downloaded,
+            canvas: cropResult ? cropResult.canvas : null,
+            blob,
+            nativeCapture: true,
+            cropped: Boolean(cropResult)
+          };
         } finally {
           await options.afterCapture();
         }
       }
-    
+
       async function exportViewportImage(context) {
-        const nativeResult = await captureWithChromeVisibleTab(context || {});
-        if (nativeResult) {
-          return nativeResult;
+        let nativeError = null;
+        try {
+          const nativeResult = await captureWithChromeVisibleTab(context || {});
+          if (nativeResult) {
+            return nativeResult;
+          }
+        } catch (error) {
+          nativeError = error;
         }
-    
+
         if (typeof html2canvas !== 'function') {
-          throw new Error('html2canvas is not available');
+          throw nativeError || new Error('html2canvas is not available');
         }
-    
+
         await options.beforeCapture();
         await sleep(60);
-    
+
         try {
-          const sourceRect = context && context.rect ? context.rect : null;
-          const captureRect = sourceRect
-            ? {
-              x: Math.max(0, Math.min(window.innerWidth, Number(sourceRect.x) || 0)),
-              y: Math.max(0, Math.min(window.innerHeight, Number(sourceRect.y) || 0)),
-              width: Math.max(1, Math.min(window.innerWidth, Number(sourceRect.width) || 0)),
-              height: Math.max(1, Math.min(window.innerHeight, Number(sourceRect.height) || 0))
-            }
-            : {
-              x: 0,
-              y: 0,
-              width: window.innerWidth,
-              height: window.innerHeight
-            };
-          captureRect.width = Math.max(1, Math.min(captureRect.width, window.innerWidth - captureRect.x));
-          captureRect.height = Math.max(1, Math.min(captureRect.height, window.innerHeight - captureRect.y));
-    
+          const captureRect = getCaptureRect(context && context.rect ? context.rect : null);
+
           const canvas = await html2canvas(document.documentElement, {
             backgroundColor: null,
             logging: false,
@@ -1918,12 +2102,12 @@
             windowWidth: window.innerWidth,
             windowHeight: window.innerHeight
           });
-    
+
           const blob = await canvasToPngBlob(canvas);
           if (!blob) {
             throw new Error('Failed to create PNG blob');
           }
-    
+
           let copied = false;
           if (context.preferClipboard) {
             if (context.deferredClipboard && context.deferredClipboard.resolveBlob) {
@@ -1935,7 +2119,7 @@
                 copied = false;
               }
             }
-    
+
             if (!copied) {
               try {
                 copied = await tryCopyBlob(blob);
@@ -1944,19 +2128,19 @@
               }
             }
           }
-    
+
           let downloaded = false;
           if (!copied) {
             downloadBlob(blob, `pinfix-${Date.now()}.png`);
             downloaded = true;
           }
-    
+
           return { copied, downloaded, canvas, blob };
         } finally {
           await options.afterCapture();
         }
       }
-    
+
       return {
         buildMarkdown,
         copyNotes,
@@ -1965,7 +2149,7 @@
         exportViewportImage
       };
     }
-    
+
     function getPinFixStyles() {
       return `
     #pinfix-root {
@@ -1979,24 +2163,24 @@
       font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       color: #102a2a;
     }
-    
+
     #pinfix-root * {
       box-sizing: border-box;
     }
-    
+
     #pinfix-root button,
     #pinfix-root input,
     #pinfix-root textarea {
       font: inherit;
     }
-    
+
     #pinfix-root button:focus-visible,
     #pinfix-root input:focus-visible,
     #pinfix-root textarea:focus-visible {
       outline: 3px solid rgba(45, 212, 191, 0.46);
       outline-offset: 2px;
     }
-    
+
     .pinfix-chrome {
       position: fixed;
       left: 12px;
@@ -2008,12 +2192,16 @@
       z-index: 40;
       pointer-events: auto;
     }
-    
+
+    #pinfix-root[data-launcher-position="custom"] .pinfix-chrome {
+      transform: none;
+    }
+
     #pinfix-root[data-launcher-position="right-center"] .pinfix-chrome {
       left: auto;
       right: 12px;
     }
-    
+
     #pinfix-root[data-launcher-position="right-bottom"] .pinfix-chrome {
       left: auto;
       right: 14px;
@@ -2021,21 +2209,21 @@
       bottom: max(18px, env(safe-area-inset-bottom));
       transform: none;
     }
-    
+
     .pinfix-overlay-layer {
       position: absolute;
       inset: 0;
       z-index: 10;
       pointer-events: none;
     }
-    
+
     .pinfix-note-layer {
       position: absolute;
       inset: 0;
       z-index: 20;
       pointer-events: none;
     }
-    
+
     .pinfix-tool-button {
       border: 1px solid rgba(15, 118, 110, 0.18);
       background: rgba(255, 255, 255, 0.92);
@@ -2043,7 +2231,7 @@
       box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
       backdrop-filter: blur(14px);
     }
-    
+
     .pinfix-launcher {
       width: 36px;
       height: 36px;
@@ -2057,7 +2245,7 @@
       position: relative;
       transition: transform 160ms ease;
     }
-    
+
     .pinfix-launcher::before {
       content: "";
       position: absolute;
@@ -2072,7 +2260,7 @@
       box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
       backdrop-filter: blur(14px);
     }
-    
+
     .pinfix-launcher::after {
       content: "";
       position: absolute;
@@ -2084,20 +2272,60 @@
       border-radius: 999px;
       background: #0f766e;
     }
-    
+
     .pinfix-toolbar {
       position: relative;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      padding: 12px 8px 8px;
+      padding: 8px;
       border-radius: 16px;
       background: rgba(255, 255, 255, 0.92);
       border: 1px solid rgba(15, 118, 110, 0.18);
       box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
       backdrop-filter: blur(14px);
     }
-    
+
+    .pinfix-toolbar-grip-row {
+      display: grid;
+      grid-template-columns: 1fr 26px;
+      gap: 6px;
+      min-height: 26px;
+    }
+
+    .pinfix-toolbar-grip,
+    .pinfix-toolbar-close {
+      width: 100%;
+      height: 26px;
+      padding: 0;
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      background: rgba(248, 250, 252, 0.9);
+      color: #0f766e;
+      box-shadow: none;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+
+    .pinfix-toolbar-grip {
+      border-radius: 10px;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .pinfix-toolbar-grip:active,
+    .pinfix-chrome.is-dragging .pinfix-toolbar-grip {
+      cursor: grabbing;
+    }
+
+    .pinfix-toolbar-grip span {
+      width: 18px;
+      height: 1px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.58;
+    }
+
     .pinfix-tool-button {
       width: 42px;
       height: 42px;
@@ -2108,29 +2336,13 @@
       font-size: 18px;
       transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
     }
-    
+
     .pinfix-toolbar-close {
-      position: absolute;
-      right: -7px;
-      top: -7px;
-      width: 22px;
-      height: 22px;
+      border-radius: 10px;
       padding: 0;
-      border: 1px solid rgba(15, 118, 110, 0.2);
-      border-radius: 999px;
-      background: #ffffff;
-      color: #0f766e;
-      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      opacity: 0;
-      visibility: hidden;
-      transform: scale(0.92);
-      transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
-      z-index: 2;
+      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
     }
-    
+
     .pinfix-icon {
       width: 19px;
       height: 19px;
@@ -2140,47 +2352,87 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    
+
     .pinfix-icon circle {
       fill: currentColor;
       stroke: none;
     }
-    
+
     .pinfix-toolbar-close .pinfix-icon {
       width: 12px;
       height: 12px;
     }
-    
-    .pinfix-toolbar:hover .pinfix-toolbar-close,
-    .pinfix-toolbar:focus-within .pinfix-toolbar-close {
-      opacity: 1;
-      visibility: visible;
-      transform: scale(1);
-    }
-    
+
     .pinfix-launcher:hover::before {
       background: rgba(222, 247, 244, 0.96);
     }
-    
+
     .pinfix-tool-button:hover {
       background: rgba(222, 247, 244, 0.96);
     }
-    
-    .pinfix-tool-danger {
-      color: #b91c1c;
-      border-color: rgba(225, 29, 46, 0.18);
-      background: rgba(255, 241, 242, 0.94);
+
+    .pinfix-toolbar-grip:hover,
+    .pinfix-toolbar-close:hover {
+      background: rgba(222, 247, 244, 0.96);
     }
-    
-    .pinfix-tool-danger:hover {
-      background: rgba(254, 226, 226, 0.96);
-    }
-    
+
     .pinfix-tool-button.is-active {
       background: #0f766e;
       color: #ffffff;
     }
-    
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-launcher::before {
+      background: rgba(15, 23, 42, 0.92);
+      border-color: rgba(94, 234, 212, 0.34);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-launcher::after {
+      background: #5eead4;
+      box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.16);
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-launcher:hover::before {
+      background: rgba(30, 41, 59, 0.94);
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar {
+      background: rgba(17, 24, 39, 0.96);
+      border-color: rgba(148, 163, 184, 0.28);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-tool-button {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(148, 163, 184, 0.28);
+      color: #ccfbf1;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-tool-button:hover {
+      background: rgba(51, 65, 85, 0.94);
+      border-color: rgba(94, 234, 212, 0.5);
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-tool-button.is-active {
+      background: #5eead4;
+      border-color: rgba(153, 246, 228, 0.92);
+      color: #042f2e;
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-grip,
+    #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-close {
+      background: rgba(15, 23, 42, 0.7);
+      border-color: rgba(148, 163, 184, 0.24);
+      color: #ccfbf1;
+    }
+
+    #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-grip:hover,
+    #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-close:hover {
+      background: rgba(51, 65, 85, 0.94);
+      border-color: rgba(94, 234, 212, 0.5);
+    }
+
     .pinfix-popover {
       position: fixed;
       width: 248px;
@@ -2198,15 +2450,11 @@
       padding: 14px;
       pointer-events: auto;
     }
-    
+
     .pinfix-popover[data-panel="more"] {
       width: 320px;
     }
-    
-    .pinfix-popover[data-panel="style"] {
-      width: min(430px, calc(100vw - 24px));
-    }
-    
+
     .pinfix-sidecar {
       position: fixed;
       z-index: 55;
@@ -2223,7 +2471,7 @@
       padding: 12px;
       pointer-events: auto;
     }
-    
+
     .pinfix-sidecar-title {
       display: flex;
       align-items: center;
@@ -2234,22 +2482,22 @@
       font-size: 13px;
       font-weight: 800;
     }
-    
+
     .pinfix-popover h3 {
       margin: 0 0 10px;
       font-size: 14px;
     }
-    
+
     .pinfix-section {
       margin-top: 10px;
     }
-    
+
     .pinfix-section-title {
       font-size: 12px;
       color: #64748b;
       margin-bottom: 8px;
     }
-    
+
     .pinfix-section-toggle {
       width: 100%;
       min-height: 34px;
@@ -2265,14 +2513,14 @@
       font-size: 12px;
       cursor: pointer;
     }
-    
+
     .pinfix-chip-row,
     .pinfix-list {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
     }
-    
+
     .pinfix-chip,
     .pinfix-list button {
       min-height: 34px;
@@ -2284,16 +2532,16 @@
       cursor: pointer;
       font-size: 12px;
     }
-    
+
     .pinfix-list button {
       flex: 1 1 calc(50% - 4px);
     }
-    
+
     .pinfix-list-stack button {
       flex-basis: 100%;
       text-align: left;
     }
-    
+
     .pinfix-annotation-sidecar-trigger {
       width: 100%;
       min-height: 38px;
@@ -2310,12 +2558,12 @@
       font-weight: 700;
       cursor: pointer;
     }
-    
+
     .pinfix-sidecar-list {
       display: grid;
       gap: 8px;
     }
-    
+
     .pinfix-sidecar-item {
       width: 100%;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -2329,12 +2577,12 @@
       text-align: left;
       cursor: pointer;
     }
-    
+
     .pinfix-sidecar-item.is-missing {
       border-color: rgba(225, 29, 46, 0.22);
       background: rgba(255, 241, 242, 0.72);
     }
-    
+
     .pinfix-sidecar-number {
       width: 28px;
       height: 28px;
@@ -2346,40 +2594,40 @@
       font-size: 13px;
       font-weight: 800;
     }
-    
+
     .pinfix-sidecar-body {
       min-width: 0;
       display: grid;
       gap: 3px;
     }
-    
+
     .pinfix-sidecar-body strong {
       color: #102a2a;
       font-size: 12px;
       line-height: 1.35;
       word-break: break-word;
     }
-    
+
     .pinfix-sidecar-body small,
     .pinfix-sidecar-empty {
       color: #64748b;
       font-size: 11px;
       line-height: 1.35;
     }
-    
+
     .pinfix-list button.pinfix-danger-action {
       flex-basis: 100%;
-      border-color: rgba(225, 29, 46, 0.28);
-      background: rgba(225, 29, 46, 0.07);
-      color: #b91c1c;
+      border-color: rgba(15, 118, 110, 0.24);
+      background: rgba(248, 250, 252, 0.92);
+      color: #0f766e;
       font-weight: 700;
     }
-    
+
     .pinfix-list button.pinfix-danger-action:hover {
-      border-color: rgba(225, 29, 46, 0.42);
-      background: rgba(225, 29, 46, 0.11);
+      border-color: rgba(15, 118, 110, 0.38);
+      background: rgba(222, 247, 244, 0.96);
     }
-    
+
     .pinfix-danger-hint {
       margin-top: 8px;
       padding: 8px 10px;
@@ -2388,14 +2636,14 @@
       color: #9f1239;
       background: rgba(255, 241, 242, 0.72);
     }
-    
+
     .pinfix-chip.is-active,
     .pinfix-list button.is-active {
       background: rgba(15, 118, 110, 0.12);
       border-color: rgba(15, 118, 110, 0.45);
       color: #0f766e;
     }
-    
+
     .pinfix-color-dot {
       width: 16px;
       height: 16px;
@@ -2404,7 +2652,7 @@
       border: 2px solid rgba(255, 255, 255, 0.85);
       box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
     }
-    
+
     .pinfix-candidate {
       position: absolute;
       border: 2px dashed rgba(15, 118, 110, 0.95);
@@ -2413,7 +2661,7 @@
       box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
       pointer-events: none;
     }
-    
+
     .pinfix-candidate-tools {
       position: absolute;
       left: 0;
@@ -2429,7 +2677,7 @@
       box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
       backdrop-filter: blur(10px);
     }
-    
+
     .pinfix-annotation-box {
       position: absolute;
       z-index: 2;
@@ -2437,20 +2685,74 @@
       box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
       pointer-events: none;
     }
-    
+
     .pinfix-annotation-box.is-interactive {
-      cursor: pointer;
       pointer-events: auto;
     }
-    
+
+    .pinfix-annotation-box.is-resizing {
+      pointer-events: auto;
+      opacity: 0.36;
+    }
+
+    .pinfix-annotation-resize-preview {
+      position: absolute;
+      z-index: 7;
+      border-radius: 14px;
+      background: rgba(225, 29, 46, 0.08);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.78) inset, 0 14px 32px rgba(225, 29, 46, 0.22);
+      pointer-events: none;
+      will-change: left, top, width, height;
+    }
+
+    .pinfix-annotation-resize-edge {
+      position: absolute;
+      display: block;
+      pointer-events: auto;
+      touch-action: none;
+      opacity: 0;
+    }
+
+    .pinfix-annotation-resize-edge.is-top,
+    .pinfix-annotation-resize-edge.is-bottom {
+      left: 0;
+      width: 100%;
+      height: 12px;
+      cursor: ns-resize;
+    }
+
+    .pinfix-annotation-resize-edge.is-top {
+      top: -6px;
+    }
+
+    .pinfix-annotation-resize-edge.is-bottom {
+      bottom: -6px;
+    }
+
+    .pinfix-annotation-resize-edge.is-left,
+    .pinfix-annotation-resize-edge.is-right {
+      top: 0;
+      width: 12px;
+      height: 100%;
+      cursor: ew-resize;
+    }
+
+    .pinfix-annotation-resize-edge.is-left {
+      left: -6px;
+    }
+
+    .pinfix-annotation-resize-edge.is-right {
+      right: -6px;
+    }
+
     .pinfix-annotation-box.is-active {
       box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.62), 0 0 22px rgba(15, 118, 110, 0.28);
     }
-    
+
     .pinfix-annotation-box.is-focused {
       box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.9), 0 0 22px rgba(245, 158, 11, 0.38);
     }
-    
+
     .pinfix-label {
       position: absolute;
       z-index: 5;
@@ -2463,23 +2765,23 @@
       pointer-events: none;
       transition: transform 140ms ease, box-shadow 140ms ease;
     }
-    
+
     .pinfix-label.is-interactive {
       cursor: pointer;
       pointer-events: auto;
     }
-    
+
     .pinfix-label.is-focused,
     .pinfix-label.is-active {
       transform: scale(1.08);
     }
-    
+
     .pinfix-label.is-inside {
       border-width: 2px !important;
       box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.52) inset;
       text-shadow: 0 1px 2px rgba(15, 23, 42, 0.32);
     }
-    
+
     .pinfix-label.has-missing-note::after {
       content: "";
       position: absolute;
@@ -2492,7 +2794,7 @@
       border: 2px solid #ffffff;
       box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
     }
-    
+
     .pinfix-mask {
       position: absolute;
       z-index: 2;
@@ -2508,7 +2810,7 @@
       box-shadow: 0 10px 24px rgba(15, 23, 42, 0.24);
       pointer-events: none;
     }
-    
+
     .pinfix-inline-tools {
       position: absolute;
       z-index: 6;
@@ -2522,7 +2824,7 @@
       box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
       backdrop-filter: blur(10px);
     }
-    
+
     .pinfix-candidate-tools button,
     .pinfix-inline-tools button {
       width: 22px;
@@ -2540,11 +2842,11 @@
       line-height: 1;
       transition: background 120ms ease, box-shadow 120ms ease;
     }
-    
+
     .pinfix-candidate-tools button {
       background: rgba(30, 41, 59, 0.84);
     }
-    
+
     .pinfix-annotation-tools {
       z-index: 7;
       opacity: 0;
@@ -2553,11 +2855,11 @@
       transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
       transform-origin: center top;
     }
-    
+
     .pinfix-annotation-tools.is-above {
       transform-origin: center bottom;
     }
-    
+
     .pinfix-annotation-tools::before {
       content: "";
       position: absolute;
@@ -2565,15 +2867,15 @@
       right: 0;
       height: var(--pinfix-tool-bridge, 12px);
     }
-    
+
     .pinfix-annotation-tools.is-above::before {
       bottom: calc(-1 * var(--pinfix-tool-bridge, 12px));
     }
-    
+
     .pinfix-annotation-tools.is-below::before {
       top: calc(-1 * var(--pinfix-tool-bridge, 12px));
     }
-    
+
     .pinfix-annotation-box:hover + .pinfix-annotation-tools,
     .pinfix-annotation-tools:hover,
     .pinfix-annotation-tools.is-active {
@@ -2581,33 +2883,33 @@
       visibility: visible;
       transform: scale(1);
     }
-    
+
     .pinfix-candidate-tools .pinfix-icon,
     .pinfix-inline-tools .pinfix-icon {
       width: 12px;
       height: 12px;
     }
-    
+
     .pinfix-candidate-tools button:hover,
     .pinfix-inline-tools button:hover {
       background: #0f766e;
       box-shadow: 0 6px 12px rgba(15, 118, 110, 0.22);
     }
-    
+
     .pinfix-candidate-tools button:active,
     .pinfix-inline-tools button:active {
       background: #115e59;
     }
-    
+
     .pinfix-inline-tools button[data-action="delete-annotation"],
     .pinfix-inline-tools button[data-action="delete-mask"] {
       background: rgba(71, 85, 105, 0.82);
     }
-    
+
     .pinfix-mask-tools button {
       background: rgba(255, 255, 255, 0.18);
     }
-    
+
     .pinfix-mask-label {
       position: absolute;
       left: 10px;
@@ -2620,11 +2922,10 @@
       font-weight: 700;
       letter-spacing: 0.04em;
     }
-    
+
     .pinfix-note-card,
     .pinfix-global-panel,
     .pinfix-global-strip,
-    .pinfix-countdown,
     .pinfix-toast {
       position: fixed;
       pointer-events: auto;
@@ -2633,7 +2934,7 @@
       box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
       backdrop-filter: blur(14px);
     }
-    
+
     .pinfix-tooltip {
       position: fixed;
       z-index: 80;
@@ -2649,7 +2950,7 @@
       pointer-events: none;
       white-space: nowrap;
     }
-    
+
     .pinfix-area-capture-active .pinfix-chrome,
     .pinfix-area-capture-active .pinfix-popover,
     .pinfix-area-capture-active .pinfix-sidecar,
@@ -2662,7 +2963,7 @@
     .pinfix-area-capture-active .pinfix-inline-tools {
       display: none !important;
     }
-    
+
     .pinfix-area-capture-layer {
       position: fixed;
       inset: 0;
@@ -2675,7 +2976,7 @@
         linear-gradient(rgba(15, 23, 42, 0.34), rgba(15, 23, 42, 0.34)),
         radial-gradient(circle at 50% 45%, rgba(45, 212, 191, 0.18), rgba(15, 23, 42, 0) 42%);
     }
-    
+
     .pinfix-area-capture-hint {
       position: fixed;
       left: 50%;
@@ -2683,7 +2984,7 @@
       transform: translateX(-50%);
       display: grid;
       gap: 4px;
-      min-width: min(420px, calc(100vw - 32px));
+      width: min(420px, calc(100vw - 32px));
       padding: 12px 16px;
       border-radius: 16px;
       border: 1px solid rgba(153, 246, 228, 0.46);
@@ -2693,16 +2994,17 @@
       backdrop-filter: blur(14px);
       text-align: center;
     }
-    
+
     .pinfix-area-capture-hint strong {
       font-size: 14px;
     }
-    
+
     .pinfix-area-capture-hint span {
       color: rgba(226, 232, 240, 0.86);
       font-size: 12px;
+      overflow-wrap: anywhere;
     }
-    
+
     .pinfix-area-capture-selection {
       position: fixed;
       border: 2px solid #5eead4;
@@ -2712,7 +3014,7 @@
         0 0 0 9999px rgba(15, 23, 42, 0.28),
         0 0 0 1px rgba(15, 118, 110, 0.5) inset;
     }
-    
+
     .pinfix-note-card {
       position: absolute;
       z-index: 25;
@@ -2722,21 +3024,20 @@
       padding: 9px;
       border-top-width: 2px;
     }
-    
+
     .pinfix-note-card.is-focused {
       box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.22), 0 14px 30px rgba(15, 23, 42, 0.14);
     }
-    
+
     .pinfix-note-card.is-dark,
     .pinfix-global-panel.is-dark,
     .pinfix-global-strip.is-dark,
-    .pinfix-countdown.is-dark,
     .pinfix-toast.is-dark {
       background: rgba(15, 23, 42, 0.88);
       color: #f8fafc;
       border-color: rgba(148, 163, 184, 0.28);
     }
-    
+
     .pinfix-note-head {
       display: flex;
       align-items: center;
@@ -2744,7 +3045,7 @@
       gap: 7px;
       margin-bottom: 6px;
     }
-    
+
     .pinfix-note-badge {
       min-width: 24px;
       height: 24px;
@@ -2755,7 +3056,7 @@
       font-size: 12px;
       font-weight: 700;
     }
-    
+
     .pinfix-note-title {
       flex: 1;
       min-width: 0;
@@ -2765,7 +3066,7 @@
       color: inherit;
       opacity: 0.74;
     }
-    
+
     .pinfix-note-delete {
       border: 0;
       background: transparent;
@@ -2782,20 +3083,20 @@
       opacity: 0.82;
       transition: background 140ms ease, opacity 140ms ease, transform 140ms ease;
     }
-    
+
     .pinfix-note-delete:hover {
       background: rgba(15, 23, 42, 0.08);
       opacity: 1;
     }
-    
+
     .pinfix-note-card.is-dark .pinfix-note-delete:hover {
       background: rgba(255, 255, 255, 0.12);
     }
-    
+
     .pinfix-note-delete:active {
       transform: scale(0.94);
     }
-    
+
     .pinfix-note-input,
     .pinfix-global-input,
     .pinfix-global-template-title {
@@ -2807,17 +3108,17 @@
       font-size: 14px;
       line-height: 1.45;
     }
-    
+
     .pinfix-note-input,
     .pinfix-global-input {
       resize: none;
     }
-    
+
     .pinfix-note-input {
       min-height: 68px;
       max-height: 190px;
     }
-    
+
     .pinfix-note-summary {
       display: block;
       width: 100%;
@@ -2834,7 +3135,7 @@
       text-overflow: ellipsis;
       cursor: text;
     }
-    
+
     .pinfix-global-strip {
       z-index: 45;
       left: 50%;
@@ -2846,14 +3147,14 @@
       padding: 10px 14px;
       cursor: pointer;
     }
-    
+
     .pinfix-global-panel {
       z-index: 45;
       left: 50%;
       bottom: 12px;
       transform: translateX(-50%);
       width: min(820px, calc(100vw - 32px));
-      min-height: min(500px, calc(100vh - 32px));
+      min-height: min(360px, calc(100vh - 32px));
       max-height: calc(100vh - 32px);
       border-radius: 18px;
       padding: 16px 16px 14px;
@@ -2862,36 +3163,37 @@
       gap: 10px;
       overflow: hidden;
     }
-    
+
     .pinfix-global-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
     }
-    
+
     .pinfix-global-template-bar {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    
+
     .pinfix-global-template-scroll {
-      flex: 1;
+      flex: 0 1 auto;
       display: flex;
       flex-wrap: nowrap;
       gap: 8px;
       min-width: 0;
+      max-width: calc(100% - 50px);
       overflow-x: auto;
       overflow-y: hidden;
-      padding: 3px 2px 8px;
+      padding: 2px 2px 4px;
       scrollbar-width: none;
     }
-    
+
     .pinfix-global-template-scroll::-webkit-scrollbar {
       display: none;
     }
-    
+
     .pinfix-global-template-chip,
     .pinfix-global-template-add,
     .pinfix-global-template-option,
@@ -2900,7 +3202,7 @@
       background: rgba(248, 250, 252, 0.92);
       color: inherit;
     }
-    
+
     .pinfix-global-template-chip,
     .pinfix-global-template-add {
       flex: 0 0 auto;
@@ -2913,92 +3215,97 @@
       white-space: nowrap;
       transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
     }
-    
+
     .pinfix-global-template-add {
-      width: 44px;
-      min-width: 44px;
-      min-height: 44px;
+      width: 40px;
+      min-width: 40px;
+      height: 40px;
+      min-height: 40px;
       padding: 0;
       display: grid;
       place-items: center;
       font-size: 18px;
       line-height: 1;
     }
-    
+
     .pinfix-global-template-chip.is-active,
     .pinfix-global-template-add.is-active {
       border-color: rgba(15, 118, 110, 0.38);
       background: rgba(222, 247, 244, 0.96);
       color: #0f766e;
     }
-    
+
     .pinfix-global-content {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-rows: minmax(0, 1fr) auto;
+      grid-template-rows: auto;
       overflow: hidden;
       overflow-x: hidden;
-      padding: 2px 2px 0;
+      padding: 0 2px;
       overscroll-behavior: contain;
     }
-    
+
     .pinfix-global-note-body,
     .pinfix-global-editor {
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
-    
+
     .pinfix-global-note-body,
     .pinfix-global-editor {
       min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
-      padding: 6px 12px 12px 6px;
+      padding: 2px 10px 8px 4px;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
     }
-    
+
     .pinfix-global-editor-top {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
     }
-    
+
     .pinfix-global-helper {
       font-size: 12px;
       line-height: 1.5;
       color: #64748b;
+      flex: 0 0 auto;
+    }
+
+    .pinfix-global-editor-top .pinfix-global-helper {
       flex: 1;
     }
-    
+
     .pinfix-global-picker {
       display: flex;
       flex-direction: column;
       flex: 0 0 auto;
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 6px;
       padding-top: 8px;
       border-top: 1px solid rgba(148, 163, 184, 0.22);
     }
-    
+
     .pinfix-global-field-label {
       font-size: 12px;
       font-weight: 700;
       color: #64748b;
     }
-    
+
     .pinfix-global-input {
-      min-height: 160px;
+      min-height: 120px;
     }
-    
+
     .pinfix-global-note-input {
-      flex: 1;
-      min-height: 180px;
+      flex: 1 1 auto;
+      min-height: 128px;
     }
-    
+
     .pinfix-global-template-title {
       min-height: 40px;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -3007,7 +3314,7 @@
       background: rgba(248, 250, 252, 0.82);
       font-size: 13px;
     }
-    
+
     #pinfix-root .pinfix-global-panel .pinfix-global-template-title:focus-visible,
     #pinfix-root .pinfix-global-panel .pinfix-global-template-content:focus-visible,
     #pinfix-root .pinfix-global-panel .pinfix-global-note-input:focus-visible {
@@ -3015,7 +3322,7 @@
       border-color: rgba(45, 212, 191, 0.58);
       box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.22);
     }
-    
+
     .pinfix-global-template-options {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3026,7 +3333,7 @@
       padding-right: 2px;
       overscroll-behavior: contain;
     }
-    
+
     .pinfix-global-template-option {
       width: 100%;
       min-width: 0;
@@ -3041,12 +3348,12 @@
       text-align: left;
       transition: background 160ms ease, border-color 160ms ease;
     }
-    
+
     .pinfix-global-template-option.is-selected {
       border-color: rgba(15, 118, 110, 0.4);
       background: rgba(222, 247, 244, 0.92);
     }
-    
+
     .pinfix-global-template-option-check {
       width: 16px;
       height: 16px;
@@ -3058,13 +3365,13 @@
       font-weight: 800;
       flex: 0 0 auto;
     }
-    
+
     .pinfix-global-template-option.is-selected .pinfix-global-template-option-check {
       border-color: rgba(15, 118, 110, 0.46);
       background: #0f766e;
       color: #ffffff;
     }
-    
+
     .pinfix-global-template-option-name {
       min-width: 0;
       font-size: 12px;
@@ -3073,23 +3380,23 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    
+
     @media (max-width: 560px) {
       .pinfix-global-template-options {
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 6px;
       }
-    
+
       .pinfix-global-template-option {
         min-height: 40px;
         padding: 6px;
       }
-    
+
       .pinfix-global-template-option-check {
         display: none;
       }
     }
-    
+
     .pinfix-global-template-content {
       min-height: 300px;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -3097,17 +3404,17 @@
       padding: 12px 14px;
       background: rgba(248, 250, 252, 0.82);
     }
-    
+
     .pinfix-global-template-danger {
       min-height: 40px;
       border-radius: 999px;
       padding: 0 14px;
       cursor: pointer;
-      color: #b91c1c;
+      color: inherit;
       white-space: nowrap;
       transition: background 160ms ease, border-color 160ms ease;
     }
-    
+
     .pinfix-global-empty {
       border: 1px dashed rgba(148, 163, 184, 0.35);
       border-radius: 12px;
@@ -3115,17 +3422,17 @@
       font-size: 12px;
       color: #64748b;
     }
-    
+
     .pinfix-global-panel.is-dark .pinfix-global-field-label,
     .pinfix-global-panel.is-dark .pinfix-global-empty,
     .pinfix-global-panel.is-dark .pinfix-global-helper {
       color: rgba(226, 232, 240, 0.82);
     }
-    
+
     .pinfix-global-panel.is-dark .pinfix-global-picker {
       border-top-color: rgba(148, 163, 184, 0.2);
     }
-    
+
     .pinfix-global-panel.is-dark .pinfix-global-template-chip,
     .pinfix-global-panel.is-dark .pinfix-global-template-add,
     .pinfix-global-panel.is-dark .pinfix-global-template-option,
@@ -3136,7 +3443,7 @@
       border-color: rgba(148, 163, 184, 0.24);
       color: #f8fafc;
     }
-    
+
     .pinfix-global-panel.is-dark .pinfix-global-template-chip.is-active,
     .pinfix-global-panel.is-dark .pinfix-global-template-add.is-active,
     .pinfix-global-panel.is-dark .pinfix-global-template-option.is-selected {
@@ -3144,7 +3451,7 @@
       border-color: rgba(45, 212, 191, 0.42);
       color: #ccfbf1;
     }
-    
+
     .pinfix-toast {
       z-index: 70;
       right: 16px;
@@ -3157,13 +3464,18 @@
       align-items: center;
       gap: 10px;
     }
-    
+
+    .pinfix-toast.is-anchored {
+      right: auto;
+      top: auto;
+    }
+
     .pinfix-toast.is-success {
       border-color: rgba(15, 118, 110, 0.26);
       background: rgba(240, 253, 250, 0.96);
       color: #0f3f3b;
     }
-    
+
     .pinfix-toast button {
       border: 0;
       border-radius: 999px;
@@ -3175,25 +3487,11 @@
       cursor: pointer;
       white-space: nowrap;
     }
-    
-    .pinfix-countdown {
-      z-index: 65;
-      right: 16px;
-      bottom: 16px;
-      border-radius: 999px;
-      padding: 10px 14px;
-      font-size: 13px;
-    }
-    
-    .pinfix-countdown strong {
-      font-size: 18px;
-      margin-left: 8px;
-    }
-    
+
     .pinfix-hidden {
       display: none !important;
     }
-    
+
     .pinfix-hidden-for-capture .pinfix-chrome,
     .pinfix-hidden-for-capture .pinfix-popover,
     .pinfix-hidden-for-capture .pinfix-sidecar,
@@ -3207,20 +3505,20 @@
     .pinfix-hidden-for-capture .pinfix-inline-tools {
       display: none !important;
     }
-    
+
     .pinfix-note-card textarea::placeholder,
     .pinfix-global-panel textarea::placeholder,
     .pinfix-global-panel input::placeholder {
       color: currentColor;
       opacity: 0.48;
     }
-    
+
     .pinfix-divider {
       height: 1px;
       background: rgba(148, 163, 184, 0.25);
       margin: 10px 0;
     }
-    
+
     .pinfix-meta-copy {
       display: grid;
       gap: 6px;
@@ -3228,15 +3526,15 @@
       color: #64748b;
       line-height: 1.45;
     }
-    
+
     .pinfix-status-good {
       color: #15803d;
     }
-    
+
     .pinfix-status-warn {
       color: #b45309;
     }
-    
+
     @media (max-width: 640px) {
       .pinfix-chrome,
       #pinfix-root[data-launcher-position="right-center"] .pinfix-chrome,
@@ -3249,47 +3547,57 @@
         flex-direction: row;
         align-items: flex-end;
       }
-    
+
       .pinfix-launcher {
         width: 48px;
         height: 48px;
       }
-    
+
       .pinfix-launcher::before {
         width: 40px;
         height: 40px;
       }
-    
+
       .pinfix-launcher::after {
         width: 14px;
         height: 14px;
       }
-    
+
       .pinfix-toolbar {
         flex-direction: row;
+        flex: 0 1 auto;
         max-width: calc(100vw - 24px);
         overflow-x: auto;
         padding: 8px;
         border-radius: 14px;
         scrollbar-width: none;
       }
-    
+
+      .pinfix-toolbar-grip-row {
+        flex: 0 0 84px;
+        grid-template-columns: 1fr 34px;
+        min-height: 44px;
+      }
+
+      .pinfix-toolbar-grip,
+      .pinfix-toolbar-close {
+        height: 44px;
+      }
+
       .pinfix-toolbar::-webkit-scrollbar {
         display: none;
       }
-    
+
       .pinfix-tool-button {
         min-width: 44px;
         width: 44px;
         height: 44px;
       }
-    
+
       .pinfix-toolbar-close {
-        opacity: 1;
-        visibility: visible;
         transform: none;
       }
-    
+
       .pinfix-popover,
       .pinfix-sidecar {
         left: 12px !important;
@@ -3299,7 +3607,7 @@
         width: auto;
         max-height: min(72vh, calc(100vh - 104px));
       }
-    
+
       .pinfix-note-card {
         position: fixed;
         left: 12px !important;
@@ -3310,7 +3618,7 @@
         max-height: min(58vh, calc(100vh - 112px));
         overflow: auto;
       }
-    
+
       .pinfix-global-panel {
         width: calc(100vw - 24px);
         min-height: min(460px, calc(100vh - 96px));
@@ -3318,16 +3626,16 @@
         bottom: calc(74px + env(safe-area-inset-bottom));
         padding: 14px 12px 12px;
       }
-    
+
       .pinfix-global-strip {
         bottom: calc(74px + env(safe-area-inset-bottom));
       }
-    
+
       .pinfix-global-template-options {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         max-height: 128px;
       }
-    
+
       .pinfix-toast {
         left: 12px;
         right: 12px;
@@ -3335,7 +3643,7 @@
         max-width: none;
       }
     }
-    
+
     @media (prefers-reduced-motion: reduce) {
       .pinfix-launcher,
       .pinfix-tool-button,
@@ -3350,7 +3658,7 @@
     }
     `;
     }
-    
+
     function createUI(options) {
       let root = null;
       let chrome = null;
@@ -3360,7 +3668,6 @@
       let globalStrip = null;
       let globalPanel = null;
       let toast = null;
-      let countdown = null;
       let tooltip = null;
       let sidecar = null;
       let candidate = null;
@@ -3371,26 +3678,28 @@
       let areaCaptureLayer = null;
       let areaCaptureDraft = null;
       let areaCapturePointerId = null;
+      let annotationResizeDraft = null;
+      let annotationResizeFrame = 0;
+      let toolbarDrag = null;
+      let toolbarDragFrame = 0;
       let latestState = null;
       let pendingTextSelection = null;
       let pendingGlobalPanelScroll = null;
       const viewportMargin = 12;
-    
+
       function getLanguage() {
         return options.getLanguage();
       }
-    
+
       function t(key) {
         return options.t(getLanguage(), key);
       }
-    
+
       function iconSvg(name) {
         const icons = {
           select: '<path d="M5 4l7 16 2-7 7-2L5 4z"></path>',
-          style: '<path d="M4 14l6-6 6 6-6 6-6-6z"></path><path d="M14 4l6 6"></path>',
           capture: '<rect x="4" y="7" width="16" height="12" rx="3"></rect><path d="M8 7l1.5-2h5L16 7"></path><circle cx="12" cy="13" r="3"></circle>',
           copy: '<rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path>',
-          more: '<circle cx="6" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="18" cy="12" r="1.7"></circle>',
           clear: '<path d="M7 7h10"></path><path d="M10 7V5h4v2"></path><path d="M9 10v7"></path><path d="M15 10v7"></path><path d="M6 7l1 13h10l1-13"></path>',
           edit: '<path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z"></path><path d="M13 7l4 4"></path>',
           mask: '<rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M8 18L18 8"></path><path d="M6 12l6-6"></path><path d="M12 18l6-6"></path>',
@@ -3398,33 +3707,33 @@
           plus: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
           close: '<path d="M6 6l12 12"></path><path d="M18 6L6 18"></path>'
         };
-    
+
         return `<svg class="pinfix-icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || ''}</svg>`;
       }
-    
+
       function injectPinFixStyles() {
         if (document.getElementById('pinfix-style')) {
           return;
         }
-    
+
         if (typeof GM_addStyle === 'function') {
           GM_addStyle(getPinFixStyles());
           return;
         }
-    
+
         const style = document.createElement('style');
         style.id = 'pinfix-style';
         style.textContent = getPinFixStyles();
         document.head.appendChild(style);
       }
-    
+
       function mount() {
         if (root) {
           return;
         }
-    
+
         injectPinFixStyles();
-    
+
         root = document.createElement('div');
         root.id = 'pinfix-root';
         root.dataset.pinfixIgnore = 'true';
@@ -3441,11 +3750,10 @@
           <div class="pinfix-global-panel pinfix-hidden" data-html2canvas-ignore="true"></div>
           <div class="pinfix-toast pinfix-hidden" data-html2canvas-ignore="true"></div>
           <div class="pinfix-tooltip pinfix-hidden" data-html2canvas-ignore="true"></div>
-          <div class="pinfix-countdown pinfix-hidden"></div>
         `;
-    
+
         document.body.appendChild(root);
-    
+
         chrome = root.querySelector('.pinfix-chrome');
         overlayLayer = root.querySelector('.pinfix-overlay-layer');
         noteLayer = root.querySelector('.pinfix-note-layer');
@@ -3455,7 +3763,6 @@
         globalPanel = root.querySelector('.pinfix-global-panel');
         toast = root.querySelector('.pinfix-toast');
         tooltip = root.querySelector('.pinfix-tooltip');
-        countdown = root.querySelector('.pinfix-countdown');
         candidate = document.createElement('div');
         candidate.className = 'pinfix-candidate pinfix-hidden';
         overlayLayer.appendChild(candidate);
@@ -3463,7 +3770,7 @@
         areaCaptureLayer.className = 'pinfix-area-capture-layer pinfix-hidden';
         areaCaptureLayer.setAttribute('data-html2canvas-ignore', 'true');
         overlayLayer.appendChild(areaCaptureLayer);
-    
+
         root.addEventListener('click', handleClick);
         root.addEventListener('contextmenu', handleContextMenu);
         root.addEventListener('dblclick', handleDoubleClick);
@@ -3472,57 +3779,400 @@
         root.addEventListener('focusout', handleFocusOut);
         root.addEventListener('pointerover', handlePointerOver);
         root.addEventListener('pointerout', handlePointerOut);
-    
+        root.addEventListener('pointerdown', handleRootPointerDown);
+
         document.addEventListener('pointerdown', handleDocumentPointerDown, true);
         document.addEventListener('dblclick', handleDocumentDoubleClick, true);
       }
-    
+
       function unmount() {
         if (!root) {
           return;
         }
-    
+
         clearAreaCaptureDraft();
         cancelSidecarClose();
-    
+        clearToolbarDrag();
+
         document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
         document.removeEventListener('dblclick', handleDocumentDoubleClick, true);
+        clearAnnotationResizeDraft();
         root.remove();
         root = null;
       }
-    
+
+      function clearAnnotationResizeDraft() {
+        if (annotationResizeFrame) {
+          window.cancelAnimationFrame(annotationResizeFrame);
+          annotationResizeFrame = 0;
+        }
+        if (annotationResizeDraft && annotationResizeDraft.element) {
+          annotationResizeDraft.element.classList.remove('is-resizing');
+        }
+        const preview = overlayLayer ? overlayLayer.querySelector('.pinfix-annotation-resize-preview') : null;
+        if (preview) {
+          preview.remove();
+        }
+        annotationResizeDraft = null;
+      }
+
+      function isPinFixChromeTarget(target) {
+        return Boolean(
+          target instanceof Element &&
+          target.closest('#pinfix-root, .pinfix-annotation-box, .pinfix-label, .pinfix-inline-tools, .pinfix-note-card')
+        );
+      }
+
+      function isPointInsideAnnotationBox(event) {
+        if (!latestState || !Array.isArray(latestState.annotations)) {
+          return false;
+        }
+
+        return latestState.annotations.some((annotation) => {
+          if (!annotation || !annotation.rect || !annotation.style) {
+            return false;
+          }
+
+          const padding = PINFIX_BOX_PADDING_OPTIONS[annotation.style.boxPadding] || 0;
+          const rect = expandRect(annotation.rect, padding);
+          return (
+            event.pageX >= rect.pageLeft &&
+            event.pageX <= rect.pageLeft + rect.width &&
+            event.pageY >= rect.pageTop &&
+            event.pageY <= rect.pageTop + rect.height
+          );
+        });
+      }
+
       function handleDocumentPointerDown(event) {
         if (!root) {
           return;
         }
-    
+
         if (!root.contains(event.target)) {
           closeAnnotationSidecar();
           hideTooltip();
           if (latestState && latestState.activePopover) {
             options.onClosePopover();
           }
+          if (
+            latestState &&
+            latestState.open &&
+            !isEditableTarget(event.target) &&
+            !isPinFixChromeTarget(event.target) &&
+            !isPointInsideAnnotationBox(event)
+          ) {
+            options.onHideNotes();
+          }
           return;
         }
-    
+
         if (sidecarLocked && !event.target.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger')) {
           closeAnnotationSidecar();
         }
       }
-    
+
       function handleDocumentDoubleClick(event) {
         if (!root || !latestState || !latestState.open) {
           return;
         }
-    
+
         if (root.contains(event.target)) {
           return;
         }
-    
-        options.onHideNotes();
+
+        if (!isEditableTarget(event.target) && !isPinFixChromeTarget(event.target) && !isPointInsideAnnotationBox(event)) {
+          options.onHideNotes();
+        }
       }
-    
+
+      function handleRootPointerDown(event) {
+        const dragHandle = event.target.closest('[data-action="drag-toolbar"]');
+        if (dragHandle) {
+          startToolbarDrag(event, dragHandle);
+          return;
+        }
+
+        const handle = event.target.closest('[data-action="resize-annotation"]');
+        if (!handle || event.button !== 0 || event.isPrimary === false) {
+          return;
+        }
+
+        const box = handle.closest('.pinfix-annotation-box');
+        const annotation = latestState && latestState.annotations
+          ? latestState.annotations.find((item) => item.id === handle.dataset.id)
+          : null;
+        if (!box || !annotation || !annotation.rect) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        annotationResizeDraft = {
+          id: annotation.id,
+          edge: handle.dataset.edge,
+          startX: event.clientX,
+          startY: event.clientY,
+          rect: { ...annotation.rect },
+          padding: PINFIX_BOX_PADDING_OPTIONS[annotation.style.boxPadding] || 0,
+          lineWidth: PINFIX_LINE_WIDTHS[annotation.style.lineWidth],
+          color: PINFIX_COLOR_PRESETS[annotation.style.colorPreset].color,
+          element: box,
+          pointerId: event.pointerId,
+          pendingRect: { ...annotation.rect }
+        };
+        box.classList.add('is-resizing');
+        renderAnnotationResizePreview(annotationResizeDraft.rect);
+        window.addEventListener('pointermove', handleAnnotationResizeMove, true);
+        window.addEventListener('pointerup', handleAnnotationResizeEnd, true);
+        window.addEventListener('pointercancel', handleAnnotationResizeCancel, true);
+      }
+
+      function startToolbarDrag(event, handle) {
+        if (event.button !== 0 || event.isPrimary === false || !chrome) {
+          return;
+        }
+
+        hideTooltip();
+        const toolbar = chrome.querySelector('.pinfix-toolbar:not(.pinfix-hidden)');
+        if (!toolbar) {
+          return;
+        }
+
+        const toolbarBox = toolbar.getBoundingClientRect();
+        const anchorX = event.clientX - toolbarBox.left;
+        const anchorY = event.clientY - toolbarBox.top;
+        toolbarDrag = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          startLeft: toolbarBox.left,
+          startTop: toolbarBox.top,
+          anchorX,
+          anchorY,
+          left: toolbarBox.left,
+          top: toolbarBox.top,
+          moved: false
+        };
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        if (typeof handle.setPointerCapture === 'function') {
+          handle.setPointerCapture(event.pointerId);
+        }
+        chrome.classList.add('is-dragging');
+        window.addEventListener('pointermove', handleToolbarDragMove, true);
+        window.addEventListener('pointerup', handleToolbarDragEnd, true);
+        window.addEventListener('pointercancel', handleToolbarDragCancel, true);
+      }
+
+      function clampToolbarPosition(left, top) {
+        const toolbar = chrome.querySelector('.pinfix-toolbar:not(.pinfix-hidden)');
+        const box = (toolbar || chrome).getBoundingClientRect();
+        const margin = 8;
+        const maxLeft = Math.max(margin, window.innerWidth - box.width - margin);
+        const maxTop = Math.max(margin, window.innerHeight - box.height - margin);
+
+        return {
+          left: clamp(left, margin, maxLeft),
+          top: clamp(top, margin, maxTop)
+        };
+      }
+
+      function applyToolbarDragPosition() {
+        toolbarDragFrame = 0;
+        if (!toolbarDrag || !chrome) {
+          return;
+        }
+
+        chrome.style.left = `${toolbarDrag.left}px`;
+        chrome.style.top = `${toolbarDrag.top}px`;
+        chrome.style.right = 'auto';
+        chrome.style.bottom = 'auto';
+        chrome.style.transform = 'none';
+      }
+
+      function scheduleToolbarDragPosition() {
+        if (!toolbarDragFrame) {
+          toolbarDragFrame = window.requestAnimationFrame(applyToolbarDragPosition);
+        }
+      }
+
+      function handleToolbarDragMove(event) {
+        if (!toolbarDrag || event.pointerId !== toolbarDrag.pointerId) {
+          return;
+        }
+
+        const deltaX = event.clientX - toolbarDrag.startX;
+        const deltaY = event.clientY - toolbarDrag.startY;
+        const position = clampToolbarPosition(toolbarDrag.startLeft + deltaX, toolbarDrag.startTop + deltaY);
+        toolbarDrag.left = position.left;
+        toolbarDrag.top = position.top;
+        toolbarDrag.moved = toolbarDrag.moved || Math.hypot(deltaX, deltaY) > 3;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        scheduleToolbarDragPosition();
+      }
+
+      function clearToolbarDrag() {
+        if (toolbarDragFrame) {
+          window.cancelAnimationFrame(toolbarDragFrame);
+          toolbarDragFrame = 0;
+        }
+        if (chrome) {
+          chrome.classList.remove('is-dragging');
+        }
+        hideTooltip();
+        toolbarDrag = null;
+        window.removeEventListener('pointermove', handleToolbarDragMove, true);
+        window.removeEventListener('pointerup', handleToolbarDragEnd, true);
+        window.removeEventListener('pointercancel', handleToolbarDragCancel, true);
+      }
+
+      function handleToolbarDragEnd(event) {
+        if (!toolbarDrag || event.pointerId !== toolbarDrag.pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        const position = clampToolbarPosition(toolbarDrag.left, toolbarDrag.top);
+        const moved = toolbarDrag.moved;
+        const anchorX = toolbarDrag.anchorX;
+        const anchorY = toolbarDrag.anchorY;
+        clearToolbarDrag();
+        if (moved && typeof options.onMoveLauncher === 'function') {
+          options.onMoveLauncher({
+            leftRatio: clamp((position.left + anchorX) / Math.max(1, window.innerWidth), 0, 1),
+            topRatio: clamp((position.top + anchorY) / Math.max(1, window.innerHeight), 0, 1)
+          });
+        }
+      }
+
+      function handleToolbarDragCancel(event) {
+        if (!toolbarDrag || event.pointerId !== toolbarDrag.pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        clearToolbarDrag();
+        renderChrome(latestState || {});
+      }
+
+      function getResizedAnnotationRect(event) {
+        const draft = annotationResizeDraft;
+        const minSize = 24;
+        const deltaX = event.clientX - draft.startX;
+        const deltaY = event.clientY - draft.startY;
+        const rect = { ...draft.rect };
+
+        if (draft.edge === 'left') {
+          const right = rect.pageLeft + rect.width;
+          rect.pageLeft = Math.min(right - minSize, Math.max(0, rect.pageLeft + deltaX));
+          rect.width = right - rect.pageLeft;
+        }
+        if (draft.edge === 'right') {
+          rect.width = Math.max(minSize, rect.width + deltaX);
+        }
+        if (draft.edge === 'top') {
+          const bottom = rect.pageTop + rect.height;
+          rect.pageTop = Math.min(bottom - minSize, Math.max(0, rect.pageTop + deltaY));
+          rect.height = bottom - rect.pageTop;
+        }
+        if (draft.edge === 'bottom') {
+          rect.height = Math.max(minSize, rect.height + deltaY);
+        }
+
+        return rect;
+      }
+
+      function handleAnnotationResizeMove(event) {
+        if (!annotationResizeDraft || event.pointerId !== annotationResizeDraft.pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        const rect = normaliseAnnotationRect(getResizedAnnotationRect(event), 24);
+        annotationResizeDraft.pendingRect = rect;
+        scheduleAnnotationResizePreview();
+      }
+
+      function scheduleAnnotationResizePreview() {
+        if (annotationResizeFrame) {
+          return;
+        }
+
+        annotationResizeFrame = window.requestAnimationFrame(() => {
+          annotationResizeFrame = 0;
+          if (annotationResizeDraft && annotationResizeDraft.pendingRect) {
+            renderAnnotationResizePreview(annotationResizeDraft.pendingRect);
+          }
+        });
+      }
+
+      function renderAnnotationResizePreview(rect) {
+        if (!overlayLayer || !annotationResizeDraft || !rect) {
+          return;
+        }
+
+        let preview = overlayLayer.querySelector('.pinfix-annotation-resize-preview');
+        if (!preview) {
+          preview = document.createElement('div');
+          preview.className = 'pinfix-annotation-resize-preview';
+          overlayLayer.appendChild(preview);
+        }
+
+        const displayRect = expandRect(rect, annotationResizeDraft.padding);
+        preview.style.left = `${displayRect.pageLeft}px`;
+        preview.style.top = `${displayRect.pageTop}px`;
+        preview.style.width = `${Math.max(displayRect.width, 8)}px`;
+        preview.style.height = `${Math.max(displayRect.height, 8)}px`;
+        preview.style.border = `${annotationResizeDraft.lineWidth}px solid ${annotationResizeDraft.color}`;
+      }
+
+      function handleAnnotationResizeEnd(event) {
+        if (!annotationResizeDraft || event.pointerId !== annotationResizeDraft.pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        const draft = annotationResizeDraft;
+        const rect = normaliseAnnotationRect(getResizedAnnotationRect(event), 24);
+        window.removeEventListener('pointermove', handleAnnotationResizeMove, true);
+        window.removeEventListener('pointerup', handleAnnotationResizeEnd, true);
+        window.removeEventListener('pointercancel', handleAnnotationResizeCancel, true);
+        clearAnnotationResizeDraft();
+        options.onResizeAnnotation(draft.id, rect);
+      }
+
+      function handleAnnotationResizeCancel(event) {
+        if (!annotationResizeDraft || event.pointerId !== annotationResizeDraft.pointerId) {
+          return;
+        }
+
+        const draft = annotationResizeDraft;
+        window.removeEventListener('pointermove', handleAnnotationResizeMove, true);
+        window.removeEventListener('pointerup', handleAnnotationResizeEnd, true);
+        window.removeEventListener('pointercancel', handleAnnotationResizeCancel, true);
+        clearAnnotationResizeDraft();
+      }
+
       function handleClick(event) {
+        if (toolbarDrag && toolbarDrag.moved) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
         const actionTarget = event.target.closest('[data-action]');
         if (!actionTarget) {
           const noteCard = event.target.closest('.pinfix-note-card');
@@ -3536,7 +4186,7 @@
           }
           return;
         }
-    
+
         const { action } = actionTarget.dataset;
         if (action === 'toggle-open') {
           options.onToggleOpen();
@@ -3575,6 +4225,10 @@
           options.onSetSetting(actionTarget.dataset.key, actionTarget.dataset.value);
         }
         if (action === 'run') {
+          if (actionTarget.dataset.name === 'close-pinfix' && toolbarDrag && toolbarDrag.moved) {
+            event.preventDefault();
+            return;
+          }
           options.onRun(actionTarget.dataset.name, actionTarget.dataset.arg || '');
         }
         if (action === 'toggle-section') {
@@ -3611,7 +4265,7 @@
           toggleAnnotationSidecar(true);
         }
       }
-    
+
       function handleContextMenu(event) {
         const actionTarget = event.target.closest('[data-action="tool"][data-tool="capture"]');
         if (!actionTarget) {
@@ -3621,33 +4275,33 @@
           }
           return;
         }
-    
+
         event.preventDefault();
-        hideTooltip();
-        closeAnnotationSidecar();
-        options.onTool('capture');
+        if (latestState && latestState.areaCaptureActive) {
+          options.onCancelAreaCapture('areaCaptureCanceled');
+        }
       }
-    
+
       function handleDoubleClick(event) {
         const actionTarget = event.target.closest('[data-action="tool"][data-tool="capture"]');
         if (actionTarget) {
           event.preventDefault();
           return;
         }
-    
+
         if (event.target.closest('#pinfix-root')) {
           return;
         }
-    
+
         options.onHideNotes();
       }
-    
+
       function isGlobalTemplateField(target) {
         return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
           ? target.dataset.templateField === 'title' || target.dataset.templateField === 'content'
           : false;
       }
-    
+
       function isGlobalPanelTextEditingActive() {
         const active = document.activeElement;
         return Boolean(
@@ -3657,25 +4311,25 @@
           (active.dataset.globalNote === 'true' || isGlobalTemplateField(active))
         );
       }
-    
+
       function handleInput(event) {
         const field = event.target;
         if (!(field instanceof HTMLTextAreaElement) && !(field instanceof HTMLInputElement)) {
           return;
         }
-    
+
         if (field.dataset.noteId) {
           autoGrow(field, 220);
           options.onChangeNote(field.dataset.noteId, field.value, false);
           syncSummary(field);
           syncMissingNoteState(field);
         }
-    
+
         if (field.dataset.globalNote === 'true') {
           autoGrow(field, Number(field.dataset.maxHeight || 320));
           options.onChangeGlobalNote(field.value);
         }
-    
+
         if (isGlobalTemplateField(field)) {
           if (field instanceof HTMLTextAreaElement) {
             autoGrow(field, Number(field.dataset.maxHeight || 240));
@@ -3683,43 +4337,43 @@
           options.onChangeGlobalTemplateDraft(field.dataset.templateField, field.value);
         }
       }
-    
+
       function handleFocusIn(event) {
         const nextTooltipTarget = getTooltipTarget(event.target);
         if (nextTooltipTarget) {
           showTooltip(nextTooltipTarget);
         }
-    
+
         if (event.target.closest && event.target.closest('.pinfix-annotation-sidecar-trigger')) {
           openAnnotationSidecar(false);
         }
-    
+
         const field = event.target;
         if (field instanceof HTMLTextAreaElement && field.dataset.noteId) {
           setCardExpanded(field.closest('.pinfix-note-card'), true);
         }
       }
-    
+
       function handleFocusOut(event) {
         const nextFocus = event.relatedTarget;
         if (!nextFocus || !root.contains(nextFocus) || !nextFocus.closest('[data-tooltip]')) {
           hideTooltip();
         }
-    
+
         if (!sidecarLocked && (!nextFocus || !nextFocus.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger'))) {
           scheduleSidecarClose();
         }
-    
+
         const field = event.target;
         if (!(field instanceof HTMLTextAreaElement) && !(field instanceof HTMLInputElement)) {
           return;
         }
-    
+
         if (field.dataset.noteId) {
           options.onChangeNote(field.dataset.noteId, field.value, true);
           return;
         }
-    
+
         if (isGlobalTemplateField(field)) {
           const currentEditor = field.closest('[data-template-editor="true"]');
           if (nextFocus && currentEditor && currentEditor.contains(nextFocus)) {
@@ -3730,40 +4384,40 @@
           options.onCommitGlobalTemplate(!nextFocus || !root.contains(nextFocus));
         }
       }
-    
+
       function handlePointerOver(event) {
         const nextTooltipTarget = getTooltipTarget(event.target);
         if (nextTooltipTarget && !nextTooltipTarget.contains(event.relatedTarget)) {
           showTooltip(nextTooltipTarget);
         }
-    
+
         if (event.target.closest && event.target.closest('.pinfix-annotation-sidecar-trigger')) {
           openAnnotationSidecar(false);
         }
-    
+
         if (event.target.closest && event.target.closest('.pinfix-sidecar')) {
           cancelSidecarClose();
         }
       }
-    
+
       function handlePointerOut(event) {
         const currentTooltipTarget = getTooltipTarget(event.target);
         if (currentTooltipTarget && !currentTooltipTarget.contains(event.relatedTarget)) {
           hideTooltip();
         }
-    
+
         const leavingSidecarArea = event.target.closest
           && event.target.closest('.pinfix-sidecar, .pinfix-annotation-sidecar-trigger');
         if (leavingSidecarArea && !leavingSidecarArea.contains(event.relatedTarget)) {
           scheduleSidecarClose();
         }
       }
-    
+
       function autoGrow(textarea, maxHeight) {
         textarea.style.height = 'auto';
         textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
       }
-    
+
       function syncSummary(textarea) {
         const card = textarea.closest('.pinfix-note-card');
         const summary = card ? card.querySelector('.pinfix-note-summary') : null;
@@ -3771,7 +4425,7 @@
           summary.textContent = summariseNote(textarea.value) || textarea.placeholder;
         }
       }
-    
+
       function syncMissingNoteState(textarea) {
         const label = Array.from(root.querySelectorAll('.pinfix-label'))
           .find((node) => node.dataset.id === textarea.dataset.noteId);
@@ -3779,47 +4433,47 @@
           label.classList.toggle('has-missing-note', !textarea.value.trim());
         }
       }
-    
+
       function setCardExpanded(card, expanded) {
         if (!card || card.dataset.notesVisible === 'false') {
           return;
         }
-    
+
         const input = card.querySelector('.pinfix-note-input');
         const summary = card.querySelector('.pinfix-note-summary');
         if (!input || !summary) {
           return;
         }
-    
+
         input.classList.toggle('pinfix-hidden', !expanded);
         summary.classList.toggle('pinfix-hidden', expanded);
       }
-    
+
       function getTooltipTarget(target) {
         if (!(target instanceof Element)) {
           return null;
         }
-    
+
         return target.closest('[data-tooltip]');
       }
-    
+
       function showTooltip(target) {
         if (!tooltip || !target || !target.dataset.tooltip) {
           return;
         }
-    
+
         tooltipTarget = target;
         tooltip.textContent = target.dataset.tooltip;
         tooltip.classList.remove('pinfix-hidden');
         positionTooltip();
       }
-    
+
       function positionTooltip() {
         if (!tooltip || !tooltipTarget || !document.body.contains(tooltipTarget)) {
           hideTooltip();
           return;
         }
-    
+
         const targetBox = tooltipTarget.getBoundingClientRect();
         const tooltipBox = tooltip.getBoundingClientRect();
         const left = clamp(targetBox.right + 10, viewportMargin, window.innerWidth - tooltipBox.width - viewportMargin);
@@ -3831,34 +4485,34 @@
         tooltip.style.left = `${left}px`;
         tooltip.style.top = `${top}px`;
       }
-    
+
       function hideTooltip() {
         tooltipTarget = null;
         if (!tooltip) {
           return;
         }
-    
+
         tooltip.classList.add('pinfix-hidden');
         tooltip.textContent = '';
       }
-    
+
       function clearAreaCaptureDraft() {
         areaCaptureDraft = null;
         areaCapturePointerId = null;
       }
-    
+
       function getAreaCapturePoint(event) {
         return {
           x: clamp(event.clientX, 0, window.innerWidth),
           y: clamp(event.clientY, 0, window.innerHeight)
         };
       }
-    
+
       function getAreaCaptureRect() {
         if (!areaCaptureDraft) {
           return null;
         }
-    
+
         const left = Math.min(areaCaptureDraft.startX, areaCaptureDraft.currentX);
         const top = Math.min(areaCaptureDraft.startY, areaCaptureDraft.currentY);
         const right = Math.max(areaCaptureDraft.startX, areaCaptureDraft.currentX);
@@ -3870,12 +4524,12 @@
           height: bottom - top
         };
       }
-    
+
       function updateAreaCaptureSelection() {
         if (!areaCaptureLayer) {
           return;
         }
-    
+
         const selection = areaCaptureLayer.querySelector('.pinfix-area-capture-selection');
         const meta = areaCaptureLayer.querySelector('.pinfix-area-capture-meta');
         const rect = getAreaCaptureRect();
@@ -3888,7 +4542,7 @@
           }
           return;
         }
-    
+
         selection.classList.remove('pinfix-hidden');
         selection.style.left = `${rect.x}px`;
         selection.style.top = `${rect.y}px`;
@@ -3898,12 +4552,12 @@
           meta.textContent = `${Math.round(rect.width)} x ${Math.round(rect.height)}`;
         }
       }
-    
+
       function handleAreaCapturePointerDown(event) {
         if (!latestState || !latestState.areaCaptureActive || event.button !== 0) {
           return;
         }
-    
+
         event.preventDefault();
         const point = getAreaCapturePoint(event);
         areaCapturePointerId = event.pointerId;
@@ -3916,24 +4570,24 @@
         areaCaptureLayer.setPointerCapture(event.pointerId);
         updateAreaCaptureSelection();
       }
-    
+
       function handleAreaCapturePointerMove(event) {
         if (!areaCaptureDraft || event.pointerId !== areaCapturePointerId) {
           return;
         }
-    
+
         event.preventDefault();
         const point = getAreaCapturePoint(event);
         areaCaptureDraft.currentX = point.x;
         areaCaptureDraft.currentY = point.y;
         updateAreaCaptureSelection();
       }
-    
+
       function handleAreaCapturePointerUp(event) {
         if (!areaCaptureDraft || event.pointerId !== areaCapturePointerId) {
           return;
         }
-    
+
         event.preventDefault();
         if (areaCaptureLayer.hasPointerCapture(event.pointerId)) {
           areaCaptureLayer.releasePointerCapture(event.pointerId);
@@ -3943,7 +4597,7 @@
         updateAreaCaptureSelection();
         options.onCaptureAreaScreenshot(rect);
       }
-    
+
       function handleAreaCapturePointerCancel(event) {
         if (areaCapturePointerId !== null && areaCaptureLayer && areaCaptureLayer.hasPointerCapture(areaCapturePointerId)) {
           areaCaptureLayer.releasePointerCapture(areaCapturePointerId);
@@ -3952,19 +4606,19 @@
         updateAreaCaptureSelection();
         options.onCancelAreaCapture(event.type === 'contextmenu' ? 'areaCaptureCanceled' : '');
       }
-    
+
       function renderAreaCapture(state) {
         if (!areaCaptureLayer) {
           return;
         }
-    
+
         if (!state.areaCaptureActive) {
           areaCaptureLayer.classList.add('pinfix-hidden');
           areaCaptureLayer.innerHTML = '';
           clearAreaCaptureDraft();
           return;
         }
-    
+
         areaCaptureLayer.classList.remove('pinfix-hidden');
         if (!areaCaptureLayer.querySelector('.pinfix-area-capture-selection')) {
           areaCaptureLayer.innerHTML = `
@@ -3985,19 +4639,19 @@
         }
         updateAreaCaptureSelection();
       }
-    
+
       function cancelSidecarClose() {
         if (sidecarCloseTimer) {
           window.clearTimeout(sidecarCloseTimer);
           sidecarCloseTimer = null;
         }
       }
-    
+
       function scheduleSidecarClose() {
         if (sidecarLocked) {
           return;
         }
-    
+
         cancelSidecarClose();
         sidecarCloseTimer = window.setTimeout(() => {
           const trigger = root.querySelector('.pinfix-annotation-sidecar-trigger');
@@ -4007,14 +4661,14 @@
           }
         }, 120);
       }
-    
+
       function openAnnotationSidecar(locked) {
         cancelSidecarClose();
         sidecarOpen = true;
         sidecarLocked = Boolean(locked) || sidecarLocked;
         renderAnnotationSidecar(latestState);
       }
-    
+
       function closeAnnotationSidecar() {
         cancelSidecarClose();
         sidecarOpen = false;
@@ -4024,22 +4678,45 @@
           sidecar.innerHTML = '';
         }
       }
-    
+
       function toggleAnnotationSidecar(locked) {
         if (sidecarOpen && sidecarLocked) {
           closeAnnotationSidecar();
           return;
         }
-    
+
         openAnnotationSidecar(locked);
       }
-    
+
       function setRootSize() {
         const size = getDocumentSize();
         root.style.width = `${size.width}px`;
         root.style.height = `${size.height}px`;
       }
-    
+
+      // Keep PinFix controls readable on both bright and dark pages.
+      // Users can override automatic tone detection from the extension options page.
+      function getToolTone(state) {
+        const theme = state && state.settings ? state.settings.toolTheme : 'auto';
+        if (theme === 'light' || theme === 'dark') {
+          return theme;
+        }
+
+        return state && state.pageTone === 'dark' ? 'dark' : 'light';
+      }
+
+      function hasValidLauncherCustomPosition(state) {
+        const custom = state && state.settings ? state.settings.launcherCustomPosition : null;
+        return Boolean(
+          state &&
+          state.settings &&
+          state.settings.launcherPosition === 'custom' &&
+          custom &&
+          Number.isFinite(Number(custom.leftRatio)) &&
+          Number.isFinite(Number(custom.topRatio))
+        );
+      }
+
       function render(state) {
         mount();
         captureTextSelection();
@@ -4048,7 +4725,11 @@
         setRootSize();
         root.classList.toggle('pinfix-hidden-for-capture', Boolean(state.captureHidden));
         root.classList.toggle('pinfix-area-capture-active', Boolean(state.areaCaptureActive));
-        root.dataset.launcherPosition = state.settings.launcherPosition || 'left-center';
+        root.dataset.launcherPosition = state.settings.launcherPosition === 'custom' && !hasValidLauncherCustomPosition(state)
+          ? 'left-center'
+          : (state.settings.launcherPosition || 'left-center');
+        root.dataset.pageTone = state.pageTone === 'dark' ? 'dark' : 'light';
+        root.dataset.toolTone = getToolTone(state);
         renderChrome(state);
         if (!state.open) {
           renderClosedState();
@@ -4060,13 +4741,12 @@
         renderAreaCapture(state);
         renderGlobalNotes(state);
         renderToast(state);
-        renderCountdown(state);
         positionTooltip();
         focusEditingNote(state);
         restoreGlobalPanelScroll();
         restoreTextSelection();
       }
-    
+
       function renderClosedState() {
         closeAnnotationSidecar();
         hideTooltip();
@@ -4098,24 +4778,20 @@
           toast.classList.add('pinfix-hidden');
           toast.innerHTML = '';
         }
-        if (countdown) {
-          countdown.classList.add('pinfix-hidden');
-          countdown.textContent = '';
-        }
       }
-    
+
       function captureTextSelection() {
         const active = document.activeElement;
         if (!(active instanceof HTMLTextAreaElement) && !(active instanceof HTMLInputElement)) {
           pendingTextSelection = null;
           return;
         }
-    
+
         if (!active.dataset.noteId && active.dataset.globalNote !== 'true' && !isGlobalTemplateField(active)) {
           pendingTextSelection = null;
           return;
         }
-    
+
         pendingTextSelection = {
           noteId: active.dataset.noteId || '',
           globalNote: active.dataset.globalNote === 'true',
@@ -4125,12 +4801,12 @@
           scrollTop: active.scrollTop
         };
       }
-    
+
       function restoreTextSelection() {
         if (!pendingTextSelection) {
           return;
         }
-    
+
         const snapshot = pendingTextSelection;
         pendingTextSelection = null;
         window.requestAnimationFrame(() => {
@@ -4139,11 +4815,11 @@
             : snapshot.templateField
               ? root.querySelector(`[data-template-field="${snapshot.templateField}"]`)
               : Array.from(root.querySelectorAll('[data-note-id]')).find((node) => node.dataset.noteId === snapshot.noteId);
-    
+
           if (!(input instanceof HTMLTextAreaElement) && !(input instanceof HTMLInputElement)) {
             return;
           }
-    
+
           const start = clamp(snapshot.start, 0, input.value.length);
           const end = clamp(snapshot.end, 0, input.value.length);
           input.focus();
@@ -4154,54 +4830,54 @@
           }
         });
       }
-    
+
       function captureGlobalPanelScroll() {
         if (isGlobalPanelTextEditingActive()) {
           pendingGlobalPanelScroll = null;
           return;
         }
-    
+
         const content = globalPanel ? globalPanel.querySelector('.pinfix-global-content') : null;
         if (!content || globalPanel.classList.contains('pinfix-hidden')) {
           pendingGlobalPanelScroll = null;
           return;
         }
-    
+
         pendingGlobalPanelScroll = {
           key: globalPanel.dataset.renderKey || '',
           top: content.scrollTop
         };
       }
-    
+
       function restoreGlobalPanelScroll() {
         if (!pendingGlobalPanelScroll) {
           return;
         }
-    
+
         const snapshot = pendingGlobalPanelScroll;
         pendingGlobalPanelScroll = null;
         window.requestAnimationFrame(() => {
           if (!globalPanel || globalPanel.dataset.renderKey !== snapshot.key) {
             return;
           }
-    
+
           const content = globalPanel.querySelector('.pinfix-global-content');
           if (content) {
             content.scrollTop = snapshot.top;
           }
         });
       }
-    
+
       function focusEditingNote(state) {
         if (!state.editingAnnotationId || state.globalNoteOpen) {
           return;
         }
-    
+
         if (document.activeElement && document.activeElement.dataset
           && document.activeElement.dataset.noteId === state.editingAnnotationId) {
           return;
         }
-    
+
         window.requestAnimationFrame(() => {
           const input = Array.from(root.querySelectorAll('[data-note-id]'))
             .find((node) => node.dataset.noteId === state.editingAnnotationId);
@@ -4213,50 +4889,96 @@
           }
         });
       }
-    
+
+      function applyChromePosition(state) {
+        if (!chrome || toolbarDrag) {
+          return;
+        }
+
+        const custom = state && state.settings ? state.settings.launcherCustomPosition : null;
+        if (hasValidLauncherCustomPosition(state)) {
+          const leftRatio = Number(custom.leftRatio);
+          const topRatio = Number(custom.topRatio);
+          chrome.style.left = '0px';
+          chrome.style.top = '0px';
+          chrome.style.right = 'auto';
+          chrome.style.bottom = 'auto';
+          chrome.style.transform = 'none';
+          const visibleChrome = state.open
+            ? chrome.querySelector('.pinfix-toolbar:not(.pinfix-hidden)')
+            : chrome.querySelector('.pinfix-launcher:not(.pinfix-hidden)');
+          const box = (visibleChrome || chrome).getBoundingClientRect();
+          const margin = 8;
+          const maxLeft = Math.max(margin, window.innerWidth - Math.max(box.width, 48) - margin);
+          const maxTop = Math.max(margin, window.innerHeight - Math.max(box.height, 48) - margin);
+          const anchorLeft = state.open ? Math.min(30, box.width / 2) : box.width / 2;
+          const anchorTop = state.open ? Math.min(13, box.height / 2) : box.height / 2;
+          chrome.style.left = `${clamp(leftRatio * window.innerWidth - anchorLeft, margin, maxLeft)}px`;
+          chrome.style.top = `${clamp(topRatio * window.innerHeight - anchorTop, margin, maxTop)}px`;
+          chrome.style.right = 'auto';
+          chrome.style.bottom = 'auto';
+          chrome.style.transform = 'none';
+          return;
+        }
+
+        chrome.style.left = '';
+        chrome.style.top = '';
+        chrome.style.right = '';
+        chrome.style.bottom = '';
+        chrome.style.transform = '';
+      }
+
       function renderChrome(state) {
         const launcher = root.querySelector('.pinfix-launcher');
         const toolbar = root.querySelector('.pinfix-toolbar');
         const buttons = [
           { tool: 'select', label: t('select'), icon: iconSvg('select') },
-          { tool: 'style', label: t('style'), icon: iconSvg('style') },
           { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
           { tool: 'copy', label: t('copy'), icon: iconSvg('copy') },
-          { action: 'run', name: 'clear-page', label: t('clearAllPageData'), icon: iconSvg('clear'), tone: 'danger' },
-          { tool: 'more', label: t('more'), icon: iconSvg('more') }
+          { action: 'run', name: 'clear-page', label: t('clearAllPageData'), icon: iconSvg('clear') }
         ];
-    
+
         launcher.classList.toggle('pinfix-hidden', state.open);
         launcher.removeAttribute('title');
         launcher.setAttribute('aria-label', t('launcherOpen'));
         launcher.dataset.tooltip = t('launcherOpen');
         launcher.textContent = '';
-    
+
         toolbar.classList.toggle('pinfix-hidden', !state.open);
         toolbar.innerHTML = `
-          <button
-            class="pinfix-toolbar-close"
-            type="button"
-            aria-label="${escapeHtml(t('launcherClose'))}"
-            data-tooltip="${escapeHtml(t('launcherClose'))}"
-            data-action="run"
-            data-name="close-pinfix"
-          >${iconSvg('close')}</button>
+          <div class="pinfix-toolbar-grip-row">
+            <button
+              class="pinfix-toolbar-grip"
+              type="button"
+              aria-label="${escapeHtml(t('moveToolbar'))}"
+              data-tooltip="${escapeHtml(t('moveToolbar'))}"
+              data-action="drag-toolbar"
+            ><span></span><span></span></button>
+            <button
+              class="pinfix-toolbar-close"
+              type="button"
+              aria-label="${escapeHtml(t('launcherClose'))}"
+              data-tooltip="${escapeHtml(t('launcherClose'))}"
+              data-action="run"
+              data-name="close-pinfix"
+            >${iconSvg('close')}</button>
+          </div>
           ${buttons
           .map((button) => {
             if (button.action === 'run') {
               return `
                 <button
-                  class="pinfix-tool-button pinfix-tool-danger"
+                  class="pinfix-tool-button"
                   type="button"
                   aria-label="${escapeHtml(button.label)}"
                   data-tooltip="${escapeHtml(button.label)}"
                   data-action="run"
                   data-name="${escapeHtml(button.name)}"
+                  data-toast-anchor="${escapeHtml(button.name)}"
                 >${button.icon}</button>
               `;
             }
-    
+
             const active = button.tool === 'select'
               ? state.tool === 'select' && state.selectionActive
               : button.tool === state.tool || button.tool === state.activePopover;
@@ -4273,8 +4995,9 @@
           })
           .join('')}
         `;
+        applyChromePosition(state);
       }
-    
+
       function renderPopover(state) {
         if (!state.open || !state.activePopover) {
           popover.classList.add('pinfix-hidden');
@@ -4283,7 +5006,7 @@
           closeAnnotationSidecar();
           return;
         }
-    
+
         const toolbarBox = root.querySelector('.pinfix-toolbar').getBoundingClientRect();
         popover.classList.remove('pinfix-hidden');
         popover.dataset.panel = state.activePopover;
@@ -4299,7 +5022,7 @@
         const nextTop = clamp(toolbarBox.top, 12, maxTop);
         popover.style.top = `${nextTop}px`;
       }
-    
+
       function renderAnnotationSidecar(state) {
         if (!sidecar || !state || !state.open || state.activePopover !== 'more' || !sidecarOpen) {
           if (!state || state.activePopover !== 'more') {
@@ -4312,10 +5035,10 @@
           }
           return;
         }
-    
+
         sidecar.innerHTML = buildAnnotationSidecarContent(state);
         sidecar.classList.remove('pinfix-hidden');
-    
+
         const popoverBox = popover.getBoundingClientRect();
         const trigger = root.querySelector('.pinfix-annotation-sidecar-trigger');
         const triggerBox = trigger ? trigger.getBoundingClientRect() : popoverBox;
@@ -4323,25 +5046,25 @@
         const maxLeft = Math.max(viewportMargin, window.innerWidth - sidecarBox.width - viewportMargin);
         let left = popoverBox.right + 10;
         let top = triggerBox.top;
-    
+
         if (left + sidecarBox.width > window.innerWidth - viewportMargin) {
           left = popoverBox.left - sidecarBox.width - 10;
           sidecar.dataset.placement = 'left';
         } else {
           sidecar.dataset.placement = 'right';
         }
-    
+
         if (left < viewportMargin) {
           left = clamp(popoverBox.left, viewportMargin, maxLeft);
           top = popoverBox.bottom + 10;
           sidecar.dataset.placement = 'bottom';
         }
-    
+
         const maxTop = Math.max(viewportMargin, window.innerHeight - sidecarBox.height - viewportMargin);
         sidecar.style.left = `${clamp(left, viewportMargin, maxLeft)}px`;
         sidecar.style.top = `${clamp(top, viewportMargin, maxTop)}px`;
       }
-    
+
       function getSafeViewportBounds() {
         return {
           left: window.scrollX + viewportMargin,
@@ -4350,23 +5073,23 @@
           bottom: window.scrollY + window.innerHeight - viewportMargin
         };
       }
-    
+
       function getOperationBounds() {
         const bounds = { ...getSafeViewportBounds() };
         const chromeBox = chrome ? chrome.getBoundingClientRect() : null;
         if (chromeBox && chromeBox.width > 0 && chromeBox.height > 0) {
           bounds.left = Math.max(bounds.left, window.scrollX + chromeBox.right + 12);
         }
-    
+
         if (globalPanel && !globalPanel.classList.contains('pinfix-hidden')) {
           bounds.bottom = Math.min(bounds.bottom, window.scrollY + globalPanel.getBoundingClientRect().top - 12);
         } else if (globalStrip && !globalStrip.classList.contains('pinfix-hidden')) {
           bounds.bottom = Math.min(bounds.bottom, window.scrollY + globalStrip.getBoundingClientRect().top - 12);
         }
-    
+
         return bounds;
       }
-    
+
       function overlapsViewport(rect, bounds) {
         return (
           rect.pageLeft + rect.width > bounds.left &&
@@ -4375,18 +5098,18 @@
           rect.pageTop < bounds.bottom
         );
       }
-    
+
       function clampBoxRect(rect, minWidth = 12, minHeight = 12) {
         const bounds = getSafeViewportBounds();
         if (!overlapsViewport(rect, bounds)) {
           return rect;
         }
-    
+
         const left = clamp(rect.pageLeft, bounds.left, Math.max(bounds.left, bounds.right - minWidth));
         const top = clamp(rect.pageTop, bounds.top, Math.max(bounds.top, bounds.bottom - minHeight));
         const right = clamp(rect.pageLeft + rect.width, left + minWidth, bounds.right);
         const bottom = clamp(rect.pageTop + rect.height, top + minHeight, bounds.bottom);
-    
+
         return {
           pageLeft: left,
           pageTop: top,
@@ -4394,26 +5117,26 @@
           height: Math.max(bottom - top, minHeight)
         };
       }
-    
+
       function clampWithin(value, min, max) {
         if (max < min) {
           return min;
         }
-    
+
         return clamp(value, min, max);
       }
-    
+
       function getVisibleRect(rect) {
         const bounds = getSafeViewportBounds();
         const left = Math.max(rect.pageLeft, bounds.left);
         const top = Math.max(rect.pageTop, bounds.top);
         const right = Math.min(rect.pageLeft + rect.width, bounds.right);
         const bottom = Math.min(rect.pageTop + rect.height, bounds.bottom);
-    
+
         if (right <= left || bottom <= top) {
           return null;
         }
-    
+
         return {
           pageLeft: left,
           pageTop: top,
@@ -4421,20 +5144,20 @@
           height: bottom - top
         };
       }
-    
+
       function getAnnotationRenderInfo(rect) {
         const visibleRect = getVisibleRect(rect);
         if (!visibleRect) {
           return null;
         }
-    
+
         // Saved annotations should scroll away naturally. This threshold hides
         // tiny edge slivers instead of pulling their labels back into the viewport.
         const minVisibleWidth = Math.min(24, Math.max(8, rect.width * 0.25));
         const minVisibleHeight = Math.min(24, Math.max(8, rect.height * 0.25));
         const visibleArea = visibleRect.width * visibleRect.height;
         const totalArea = Math.max(rect.width * rect.height, 1);
-    
+
         if (
           visibleRect.width < minVisibleWidth ||
           visibleRect.height < minVisibleHeight ||
@@ -4442,26 +5165,26 @@
         ) {
           return null;
         }
-    
+
         return {
           originalRect: rect,
           visibleRect,
           frameRect: visibleRect
         };
       }
-    
+
       function getFloatingPosition(preferredLeft, preferredTop, width, height) {
         const bounds = getSafeViewportBounds();
         return getFloatingPositionInBounds(preferredLeft, preferredTop, width, height, bounds);
       }
-    
+
       function getFloatingPositionInBounds(preferredLeft, preferredTop, width, height, bounds) {
         return {
           pageLeft: clampWithin(preferredLeft, bounds.left, Math.max(bounds.left, bounds.right - width)),
           pageTop: clampWithin(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - height))
         };
       }
-    
+
       function rectsOverlap(leftRect, rightRect) {
         return (
           leftRect.pageLeft < rightRect.pageLeft + rightRect.width &&
@@ -4470,7 +5193,7 @@
           leftRect.pageTop + leftRect.height > rightRect.pageTop
         );
       }
-    
+
       function getLabelLayout(frameRect, labelSize) {
         const bounds = getSafeViewportBounds();
         const outsideTop = frameRect.pageTop - labelSize * 0.55;
@@ -4480,7 +5203,7 @@
           outsideLeft >= bounds.left &&
           outsideLeft + labelSize <= bounds.right
         );
-    
+
         if (outsideFits) {
           return {
             mode: 'outside',
@@ -4493,7 +5216,7 @@
             }
           };
         }
-    
+
         const innerGap = 8;
         const innerSize = Math.max(28, Math.min(labelSize, Math.min(frameRect.width, frameRect.height) - innerGap * 2));
         return {
@@ -4515,7 +5238,7 @@
           }
         };
       }
-    
+
       function getCompactToolRailLayout(frameRect, labelRect, group, reserveBothGroups = false) {
         const bounds = getOperationBounds();
         const gap = 6;
@@ -4528,7 +5251,7 @@
         const groupOffset = reserveBothGroups && group === 'candidate' ? annotationWidth + gap : 0;
         let railLeft = frameRect.pageLeft + inset;
         let railTop = frameRect.pageTop + inset;
-    
+
         if (labelRect) {
           const labelPad = 4;
           const railRect = {
@@ -4543,17 +5266,17 @@
             width: labelRect.width + labelPad * 2,
             height: labelRect.height + labelPad * 2
           };
-    
+
           if (rectsOverlap(railRect, paddedLabelRect)) {
             const lowerTop = labelRect.pageTop + labelRect.height + gap;
             const maxInsideTop = frameRect.pageTop + frameRect.height - toolHeight - inset;
             railTop = maxInsideTop >= frameRect.pageTop + inset ? Math.min(maxInsideTop, lowerTop) : lowerTop;
           }
         }
-    
+
         railLeft = clampWithin(railLeft, bounds.left, Math.max(bounds.left, bounds.right - totalWidth));
         railTop = clampWithin(railTop, bounds.top, Math.max(bounds.top, bounds.bottom - toolHeight));
-    
+
         return {
           pageLeft: railLeft + groupOffset,
           pageTop: railTop,
@@ -4561,7 +5284,7 @@
           height: toolHeight
         };
       }
-    
+
       function getExternalToolRailLayout(frameRect) {
         const bounds = getOperationBounds();
         const gap = 9;
@@ -4577,7 +5300,7 @@
         const preferBelow = centerY <= viewportMiddle;
         let pageTop = preferBelow ? belowTop : aboveTop;
         let placement = preferBelow ? 'below' : 'above';
-    
+
         if (preferBelow && !belowFits && aboveFits) {
           pageTop = aboveTop;
           placement = 'above';
@@ -4585,9 +5308,9 @@
           pageTop = belowTop;
           placement = 'below';
         }
-    
+
         pageTop = clampWithin(pageTop, bounds.top, Math.max(bounds.top, bounds.bottom - toolHeight));
-    
+
         return {
           pageLeft: clampWithin(centerLeft, bounds.left, Math.max(bounds.left, bounds.right - toolWidth)),
           pageTop,
@@ -4596,13 +5319,13 @@
           placement
         };
       }
-    
+
       function positionCandidateTools(displayRect, activeRenderInfo) {
         const tools = candidate.querySelector('.pinfix-candidate-tools');
         if (!tools) {
           return;
         }
-    
+
         const pairedWithAnnotation = Boolean(activeRenderInfo);
         const railFrameRect = pairedWithAnnotation ? activeRenderInfo.frameRect : displayRect;
         const toolsPosition = getCompactToolRailLayout(
@@ -4611,50 +5334,50 @@
           'candidate',
           pairedWithAnnotation
         );
-    
+
         tools.style.left = `${toolsPosition.pageLeft - displayRect.pageLeft}px`;
         tools.style.top = `${toolsPosition.pageTop - displayRect.pageTop}px`;
         tools.style.right = 'auto';
       }
-    
+
       function shouldShareToolRail(leftRect, rightRect) {
         if (!leftRect || !rightRect) {
           return false;
         }
-    
+
         const paddedLeftRect = {
           pageLeft: leftRect.pageLeft - 12,
           pageTop: leftRect.pageTop - 12,
           width: leftRect.width + 24,
           height: leftRect.height + 24
         };
-    
+
         return rectsOverlap(paddedLeftRect, rightRect);
       }
-    
+
       function shouldShowToolRail(rect) {
         if (!rect) {
           return false;
         }
-    
+
         return rect.width >= PINFIX_MIN_TOOL_TARGET_WIDTH && rect.height >= PINFIX_MIN_TOOL_TARGET_HEIGHT;
       }
-    
+
       function shouldShowAnnotationTools(rect) {
         if (!rect) {
           return false;
         }
-    
+
         return rect.width >= 24 && rect.height >= 24;
       }
-    
+
       function renderAnnotations(state) {
         const candidatePadding = PINFIX_BOX_PADDING_OPTIONS[state.settings.boxPadding] || 0;
         let candidateDisplayRect = null;
         let candidateShowsTools = false;
         let activeRenderInfo = null;
         candidate.innerHTML = '';
-    
+
         const currentCandidate = state.candidate;
         if (!currentCandidate || !state.open || state.tool !== 'select' || !state.selectionActive || state.captureHidden || state.globalNoteOpen) {
           candidate.classList.add('pinfix-hidden');
@@ -4676,14 +5399,14 @@
             </div>
           ` : '';
         }
-    
+
         overlayLayer.querySelectorAll('.pinfix-annotation-box, .pinfix-annotation-tools, .pinfix-label, .pinfix-mask').forEach((node) => node.remove());
         noteLayer.innerHTML = '';
-    
+
         state.masks.forEach((mask) => {
           renderMask(mask);
         });
-    
+
         state.annotations.forEach((annotation) => {
           const renderInfo = renderAnnotationBox(annotation, state, candidateDisplayRect);
           if (renderInfo && annotation.id === state.activeAnnotationId) {
@@ -4693,7 +5416,7 @@
             renderAnnotationNote(annotation, state, renderInfo);
           }
         });
-    
+
         if (candidateDisplayRect && candidateShowsTools) {
           const pairedRenderInfo = activeRenderInfo && activeRenderInfo.showsTools && shouldShareToolRail(activeRenderInfo.frameRect, candidateDisplayRect)
             ? activeRenderInfo
@@ -4701,7 +5424,7 @@
           positionCandidateTools(candidateDisplayRect, pairedRenderInfo);
         }
       }
-    
+
       function renderAnnotationBox(annotation, state, candidateDisplayRect) {
         const color = PINFIX_COLOR_PRESETS[annotation.style.colorPreset].color;
         const lineWidth = PINFIX_LINE_WIDTHS[annotation.style.lineWidth];
@@ -4712,6 +5435,7 @@
         const isFocused = annotation.id === state.highlightedAnnotationId;
         const canActivate = state.open && !state.captureHidden;
         const boxInteractive = canActivate && state.tool !== 'select';
+        const canResize = canActivate;
         const boxRect = expandRect(annotation.rect, padding);
         const renderInfo = getAnnotationRenderInfo(boxRect);
         if (!renderInfo) {
@@ -4720,7 +5444,7 @@
         const frameRect = renderInfo.frameRect;
         const labelLayout = getLabelLayout(frameRect, labelSize);
         const showsTools = shouldShowAnnotationTools(frameRect);
-    
+
         const box = document.createElement('div');
         box.className = `pinfix-annotation-box ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${boxInteractive ? 'is-interactive' : ''}`;
         box.dataset.action = 'activate-annotation';
@@ -4733,15 +5457,23 @@
         box.style.boxShadow = isFocused
           ? `0 0 0 2px rgba(245, 158, 11, 0.86), 0 12px 28px rgba(245, 158, 11, 0.26), 0 0 0 1px ${stroke} inset`
           : `0 0 0 1px ${stroke} inset, 0 10px 26px ${isActive ? `${color}3f` : `${color}24`}, 0 0 0 4px ${isActive ? `${color}18` : `${color}10`}`;
+        if (canResize) {
+          box.innerHTML = `
+            <span class="pinfix-annotation-resize-edge is-top" data-action="resize-annotation" data-edge="top" data-id="${annotation.id}"></span>
+            <span class="pinfix-annotation-resize-edge is-right" data-action="resize-annotation" data-edge="right" data-id="${annotation.id}"></span>
+            <span class="pinfix-annotation-resize-edge is-bottom" data-action="resize-annotation" data-edge="bottom" data-id="${annotation.id}"></span>
+            <span class="pinfix-annotation-resize-edge is-left" data-action="resize-annotation" data-edge="left" data-id="${annotation.id}"></span>
+          `;
+        }
         overlayLayer.appendChild(box);
-    
+
         const shareCandidateRail = showsTools && isActive && candidateDisplayRect && shouldShareToolRail(frameRect, candidateDisplayRect);
         renderInfo.labelRect = labelLayout.rect;
         renderInfo.showsTools = showsTools;
         if (showsTools) {
           renderAnnotationTools(annotation, renderInfo, labelLayout.rect, isActive, shareCandidateRail);
         }
-    
+
         const label = document.createElement('div');
         const missingNote = !String(annotation.note || '').trim();
         label.className = `pinfix-label ${labelLayout.mode === 'inside' ? 'is-inside' : ''} ${isFocused ? 'is-focused' : ''} ${isActive ? 'is-active' : ''} ${canActivate ? 'is-interactive' : ''} ${missingNote ? 'has-missing-note' : ''}`;
@@ -4764,7 +5496,7 @@
         overlayLayer.appendChild(label);
         return renderInfo;
       }
-    
+
       function renderAnnotationTools(annotation, renderInfo, labelRect, isActive, reserveCandidateSlot) {
         const frameRect = renderInfo.frameRect;
         const position = getExternalToolRailLayout(frameRect, labelRect, reserveCandidateSlot);
@@ -4780,7 +5512,7 @@
         `;
         overlayLayer.appendChild(tools);
       }
-    
+
       function renderMask(mask) {
         const element = document.createElement('div');
         element.className = 'pinfix-mask';
@@ -4798,7 +5530,7 @@
         `;
         overlayLayer.appendChild(element);
       }
-    
+
       function getNotePosition(renderInfo) {
         const estimatedHeight = 122;
         const bounds = getOperationBounds();
@@ -4808,14 +5540,14 @@
         const shouldFlip = defaultTop + estimatedHeight > bounds.bottom && boxRect.pageTop - estimatedHeight >= bounds.top;
         const rightAlignedLeft = boxRect.pageLeft + boxRect.width - cardWidth;
         const preferredTop = shouldFlip ? boxRect.pageTop - estimatedHeight : defaultTop;
-    
+
         return {
           left: clampWithin(rightAlignedLeft, bounds.left, Math.max(bounds.left, bounds.right - cardWidth)),
           top: clampWithin(preferredTop, bounds.top, Math.max(bounds.top, bounds.bottom - estimatedHeight)),
           width: cardWidth
         };
       }
-    
+
       function renderAnnotationNote(annotation, state, renderInfo) {
         const color = PINFIX_COLOR_PRESETS[annotation.style.colorPreset].color;
         const position = getNotePosition(renderInfo);
@@ -4842,18 +5574,18 @@
           >${escapeHtml(annotation.note || '')}</textarea>
         `;
         noteLayer.appendChild(card);
-    
+
         const input = card.querySelector('.pinfix-note-input');
         if (input) {
           autoGrow(input, 220);
         }
       }
-    
+
       function getTemplateDisplayName(template) {
         const title = String(template && template.title ? template.title : '').trim();
         return title || t('templateUntitled');
       }
-    
+
       function renderGlobalTemplateTabs(state) {
         const draftActive = state.globalNoteView === 'template' && !state.activeTemplateId && state.draftTemplate;
         return `
@@ -4883,12 +5615,12 @@
           </div>
         `;
       }
-    
+
       function renderGlobalTemplateOptions(state) {
         if (!state.templates.length) {
           return `<div class="pinfix-global-empty">${escapeHtml(t('templateEmptyHint'))}</div>`;
         }
-    
+
         const selectedIds = new Set(state.selectedTemplateIds || []);
         return `
           <div class="pinfix-global-template-options">
@@ -4909,7 +5641,7 @@
           </div>
         `;
       }
-    
+
       function renderGlobalTemplateEditor(state, panelHeight) {
         const draft = state.draftTemplate || { title: '', content: '' };
         return `
@@ -4943,7 +5675,7 @@
           </div>
         `;
       }
-    
+
       function renderGlobalNoteBody(state, panelHeight) {
         return `
           <div class="pinfix-global-note-body">
@@ -4961,30 +5693,30 @@
           </div>
         `;
       }
-    
+
       function renderGlobalNotes(state) {
         globalStrip.classList.toggle('pinfix-hidden', state.globalNoteOpen);
         globalPanel.classList.toggle('pinfix-hidden', !state.globalNoteOpen);
         globalStrip.textContent = t('globalNotes');
         globalStrip.classList.toggle('is-dark', state.pageTone === 'dark');
         globalPanel.classList.toggle('is-dark', state.pageTone === 'dark');
-    
+
         if (!state.globalNoteOpen) {
           return;
         }
-    
+
         const panelHeight = state.globalNoteHeight;
         const renderKey = getGlobalPanelRenderKey(state);
         const nextUiKey = getGlobalPanelUiKey(state);
         const canReuseEditingPanel = globalPanel.dataset.uiKey === nextUiKey && isGlobalPanelTextEditingActive();
-    
+
         globalPanel.style.height = `${panelHeight}px`;
         globalPanel.dataset.renderKey = renderKey;
         if (canReuseEditingPanel) {
           updateGlobalPanelLiveValues(state);
           return;
         }
-    
+
         globalPanel.innerHTML = `
           <div class="pinfix-global-head">
             <strong>${escapeHtml(t('globalNotes'))}</strong>
@@ -4998,24 +5730,24 @@
           </div>
         `;
         globalPanel.dataset.uiKey = nextUiKey;
-    
+
         const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
         if (noteTextarea) {
           autoGrow(noteTextarea, Number(noteTextarea.dataset.maxHeight || 320));
         }
-    
+
         const templateTextarea = globalPanel.querySelector('[data-template-field="content"]');
         if (templateTextarea) {
           autoGrow(templateTextarea, Number(templateTextarea.dataset.maxHeight || 240));
         }
       }
-    
+
       function getGlobalPanelRenderKey(state) {
         return state.globalNoteView === 'template'
           ? `template:${state.activeTemplateId || 'draft'}`
           : 'note';
       }
-    
+
       function getGlobalPanelUiKey(state) {
         const templateSignature = state.templates
           .map((template) => template.id)
@@ -5023,7 +5755,7 @@
         const selectedSignature = state.globalNoteView === 'note'
           ? (state.selectedTemplateIds || []).join('|')
           : '';
-    
+
         return [
           getGlobalPanelRenderKey(state),
           templateSignature,
@@ -5033,19 +5765,19 @@
           state.globalNoteView === 'template' ? Boolean(state.activeTemplateId) : ''
         ].join('::');
       }
-    
+
       function syncGlobalTemplateChrome(state) {
         if (!state || !globalPanel || globalPanel.classList.contains('pinfix-hidden')) {
           return;
         }
-    
+
         const templateBar = globalPanel.querySelector('.pinfix-global-template-bar');
         if (templateBar) {
           const wrapper = document.createElement('div');
           wrapper.innerHTML = renderGlobalTemplateTabs(state).trim();
           templateBar.replaceWith(wrapper.firstElementChild);
         }
-    
+
         const editorTop = globalPanel.querySelector('.pinfix-global-editor-top');
         if (editorTop && state.activeTemplateId) {
           let deleteButton = editorTop.querySelector('[data-action="delete-global-template"]');
@@ -5059,47 +5791,48 @@
           }
           deleteButton.dataset.id = state.activeTemplateId;
         }
-    
+
         globalPanel.dataset.renderKey = getGlobalPanelRenderKey(state);
         globalPanel.dataset.uiKey = getGlobalPanelUiKey(state);
       }
-    
+
       function updateGlobalPanelLiveValues(state) {
         const noteTextarea = globalPanel.querySelector('[data-global-note="true"]');
         if (noteTextarea instanceof HTMLTextAreaElement && document.activeElement !== noteTextarea) {
           noteTextarea.value = state.globalNote || '';
           autoGrow(noteTextarea, Number(noteTextarea.dataset.maxHeight || 320));
         }
-    
+
         if (!state.draftTemplate) {
           return;
         }
-    
+
         const titleInput = globalPanel.querySelector('[data-template-field="title"]');
         if (titleInput instanceof HTMLInputElement && document.activeElement !== titleInput) {
           titleInput.value = state.draftTemplate.title || '';
         }
-    
+
         const contentTextarea = globalPanel.querySelector('[data-template-field="content"]');
         if (contentTextarea instanceof HTMLTextAreaElement && document.activeElement !== contentTextarea) {
           contentTextarea.value = state.draftTemplate.content || '';
           autoGrow(contentTextarea, Number(contentTextarea.dataset.maxHeight || 240));
         }
       }
-    
+
       function renderToast(state) {
         if (!state.toast) {
           toast.classList.add('pinfix-hidden');
           toast.innerHTML = '';
           return;
         }
-    
+
         const toastPayload = typeof state.toast === 'string'
           ? { message: state.toast }
           : state.toast;
         toast.classList.remove('pinfix-hidden');
         toast.classList.toggle('is-dark', state.pageTone === 'dark');
         toast.classList.toggle('is-success', toastPayload.tone === 'success');
+        toast.classList.toggle('is-anchored', Boolean(toastPayload.anchor));
         toast.innerHTML = `
           <span>${escapeHtml(toastPayload.message || '')}</span>
           ${toastPayload.actionName && toastPayload.actionLabel ? `
@@ -5108,20 +5841,32 @@
             </button>
           ` : ''}
         `;
+        positionToast(toastPayload);
       }
-    
-      function renderCountdown(state) {
-        if (!state.captureMode) {
-          countdown.classList.add('pinfix-hidden');
-          countdown.textContent = '';
+
+      function positionToast(toastPayload) {
+        toast.style.left = '';
+        toast.style.right = '';
+        toast.style.top = '';
+
+        if (!toastPayload.anchor) {
           return;
         }
-    
-        countdown.classList.remove('pinfix-hidden');
-        countdown.classList.toggle('is-dark', state.pageTone === 'dark');
-        countdown.innerHTML = `${escapeHtml(t('screenshotMode'))}<strong>${state.countdownRemaining}</strong>`;
+
+        const anchor = root.querySelector(`[data-toast-anchor="${toastPayload.anchor}"]`);
+        if (!anchor) {
+          return;
+        }
+
+        const anchorBox = anchor.getBoundingClientRect();
+        const toastBox = toast.getBoundingClientRect();
+        const gap = 10;
+        const left = clamp(anchorBox.right + gap, viewportMargin, window.innerWidth - toastBox.width - viewportMargin);
+        const top = clamp(anchorBox.top + anchorBox.height / 2 - toastBox.height / 2, viewportMargin, window.innerHeight - toastBox.height - viewportMargin);
+        toast.style.left = `${left}px`;
+        toast.style.top = `${top}px`;
       }
-    
+
       function buildChipRow(settingKey, values, activeValue, formatter) {
         return `
           <div class="pinfix-chip-row">
@@ -5142,7 +5887,7 @@
           </div>
         `;
       }
-    
+
       function buildAnnotationSidecarContent(state) {
         const items = state.annotations.length
           ? state.annotations.map((annotation) => {
@@ -5165,7 +5910,7 @@
             `;
           }).join('')
           : `<div class="pinfix-sidecar-empty">${escapeHtml(t('emptyState'))}</div>`;
-    
+
         return `
           <div class="pinfix-sidecar-title">
             <span>${escapeHtml(t('annotationList'))}</span>
@@ -5174,77 +5919,18 @@
           <div class="pinfix-sidecar-list">${items}</div>
         `;
       }
-    
+
       function buildPopoverContent(state) {
-        if (state.activePopover === 'style') {
-          return `
-            <h3>${escapeHtml(t('style'))}</h3>
-            <div class="pinfix-section">
-              <div class="pinfix-section-title">${escapeHtml(t('styleColor'))}</div>
-              ${buildChipRow('colorPreset', Object.keys(PINFIX_COLOR_PRESETS), state.settings.colorPreset, (key) => {
-                const item = PINFIX_COLOR_PRESETS[key];
-                const labelKey = `color${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-                return `<span class="pinfix-color-dot" style="background:${item.color}"></span> ${escapeHtml(t(labelKey))}`;
-              })}
-            </div>
-            <div class="pinfix-section">
-              <div class="pinfix-section-title">${escapeHtml(t('styleWidth'))}</div>
-              ${buildChipRow('lineWidth', Object.keys(PINFIX_LINE_WIDTHS), state.settings.lineWidth, (key) => escapeHtml(t(`width${key.charAt(0).toUpperCase()}${key.slice(1)}`)))}
-            </div>
-            <div class="pinfix-section">
-              <div class="pinfix-section-title">${escapeHtml(t('styleLabelSize'))}</div>
-              ${buildChipRow('labelSize', Object.keys(PINFIX_LABEL_SIZES), state.settings.labelSize, (key) => escapeHtml(t(`size${key.charAt(0).toUpperCase()}${key.slice(1)}`)))}
-            </div>
-            <div class="pinfix-section">
-              <div class="pinfix-section-title">${escapeHtml(t('styleLabelStyle'))}</div>
-              ${buildChipRow('labelStyle', Object.keys(PINFIX_LABEL_STYLES), state.settings.labelStyle, (key) => t(key === 'solid' ? 'styleSolid' : 'styleRing'))}
-            </div>
-            <div class="pinfix-section">
-              <div class="pinfix-section-title">${escapeHtml(t('styleBoxPadding'))}</div>
-              ${buildChipRow('boxPadding', Object.keys(PINFIX_BOX_PADDING_OPTIONS), state.settings.boxPadding, (key) => escapeHtml(t(`padding${key.charAt(0).toUpperCase()}${key.slice(1)}`)))}
-            </div>
-            <div class="pinfix-section">
-              <div class="pinfix-section-title">${escapeHtml(t('styleContrast'))}</div>
-              ${buildChipRow('contrastMode', ['auto', 'light', 'dark'], state.settings.contrastMode, (key) => t(`contrast${key.charAt(0).toUpperCase()}${key.slice(1)}`))}
-            </div>
-          `;
+        if (state.activePopover !== 'more') {
+          return '';
         }
-    
-        if (state.activePopover === 'capture') {
-          const reviewState = state.reviewSummary || { missingCount: 0, maskCount: 0, ready: true };
-          const reviewMarkup = reviewState.ready
-            ? `<div class="pinfix-meta-copy pinfix-status-good">${escapeHtml(t('reviewReady'))}</div>`
-            : `
-              <div class="pinfix-meta-copy pinfix-status-warn">
-                <div>${escapeHtml(fillTemplate(t('reviewMissing'), { count: reviewState.missingCount }))}</div>
-                <div>${escapeHtml(fillTemplate(t('reviewMissingList'), { numbers: reviewState.missingNumbers.join(', ') }))}</div>
-              </div>
-            `;
-          return `
-            <h3>${escapeHtml(t('capture'))}</h3>
-            <div class="pinfix-list">
-              <button type="button" data-action="run" data-name="screenshot-mode">${escapeHtml(t('screenshotMode'))}</button>
-              <button type="button" data-action="run" data-name="export-image">${escapeHtml(t('saveLocally'))}</button>
-              <button type="button" data-action="run" data-name="copy-image">${escapeHtml(t('copyImage'))}</button>
-            </div>
-            <div class="pinfix-divider"></div>
-            <div class="pinfix-section-title">${escapeHtml(t('reviewStatus'))}</div>
-            ${reviewMarkup}
-            <div class="pinfix-divider"></div>
-            <div class="pinfix-section-title">${escapeHtml(t('countdown'))}</div>
-            ${buildChipRow('countdown', PINFIX_COUNTDOWN_OPTIONS, state.settings.countdown, (value) => `${value}s`)}
-            <div class="pinfix-section" style="font-size:12px;color:#64748b;">
-              ${escapeHtml(t('exportLimit'))}
-            </div>
-          `;
-        }
-    
+
         const noteToggleKey = state.settings.notesVisible ? 'notesOff' : 'notesOn';
         const reviewState = state.reviewSummary || { missingCount: 0, maskCount: 0, ready: true };
         const annotationListLabel = fillTemplate(t('viewAnnotationList'), {
           count: state.annotations.length
         });
-    
+
         const reviewBlock = reviewState.ready
           ? `<div class="pinfix-meta-copy pinfix-status-good">${escapeHtml(t('reviewReady'))}</div>`
           : `
@@ -5253,10 +5939,10 @@
               <div>${escapeHtml(fillTemplate(t('reviewMissingList'), { numbers: reviewState.missingNumbers.join(', ') }))}</div>
             </div>
           `;
-    
+
         const maskButtonKey = state.selectionMode === 'mask' ? 'privacyModeStop' : 'privacyModeStart';
         const hotkeysOpen = Boolean(state.expandedSections && state.expandedSections.hotkeys);
-    
+
         return `
           <h3>${escapeHtml(t('more'))}</h3>
           <div class="pinfix-list">
@@ -5295,8 +5981,6 @@
           </button>
           <div class="pinfix-meta-copy ${hotkeysOpen ? '' : 'pinfix-hidden'}">
             <div>${escapeHtml(t('hotkeyCopy'))}</div>
-            <div>${escapeHtml(t('hotkeyScreenshot'))}</div>
-            <div>${escapeHtml(t('hotkeyExport'))}</div>
             <div>${escapeHtml(t('hotkeyUndo'))}</div>
             <div>${escapeHtml(t('hotkeyNotes'))}</div>
           </div>
@@ -5314,36 +5998,32 @@
           <div class="pinfix-meta-copy">${escapeHtml(t('annotationListHint'))}</div>
         `;
       }
-    
+
       return {
         mount,
         unmount,
         render
       };
     }
-    
+
     function createPinFixApp() {
       const i18n = createI18n();
       const storage = createStorage();
       let toastTimer = null;
-      let countdownTimer = null;
       let focusTimer = null;
       let refreshScheduled = false;
-      let lastScreenshotBlob = null;
       let captureInProgress = false;
       let lastUrl = storage.normaliseUrl(window.location.href);
       let routeWatcherAttached = false;
-    
+
       const state = {
         open: false,
         tool: 'select',
         selectionMode: 'annotate',
         selectionActive: true,
         activePopover: null,
-        captureMode: false,
         captureHidden: false,
         areaCaptureActive: false,
-        countdownRemaining: 0,
         candidate: null,
         candidateElement: null,
         annotations: [],
@@ -5352,7 +6032,7 @@
         selectedTemplateIds: [],
         globalNote: '',
         globalNoteOpen: false,
-        globalNoteHeight: 560,
+        globalNoteHeight: 420,
         globalNoteView: 'note',
         activeTemplateId: '',
         draftTemplate: null,
@@ -5368,7 +6048,7 @@
         pageTone: 'light',
         settings: storage.loadGlobalSettings()
       };
-    
+
       const ui = createUI({
         getLanguage: () => i18n.resolveLanguage(state.settings.language),
         t: (language, key) => i18n.t(language, key),
@@ -5391,12 +6071,14 @@
         onFocusAnnotation: (id) => focusAnnotation(id),
         onEditAnnotation: (id) => editAnnotation(id),
         onMaskAnnotation: (id) => maskAnnotation(id),
+        onResizeAnnotation: (id, rect) => resizeAnnotation(id, rect),
         onAdjustMask: (id, delta) => adjustMask(id, delta),
         onToggleSection: (section) => toggleSection(section),
         onCandidateAdjust: (direction) => adjustCandidate(direction),
         onCandidatePick: (kind) => addCandidateSelection(kind),
         onChangeNote: (id, value, saveNow) => updateNote(id, value, saveNow),
         onChangeGlobalNote: (value) => updateGlobalNote(value),
+        onMoveLauncher: (position) => moveLauncher(position),
         onShowGlobalNoteView: () => showGlobalNoteView(),
         onShowGlobalTemplate: (id) => showGlobalTemplate(id),
         onCreateGlobalTemplate: () => createGlobalTemplateDraft(),
@@ -5409,11 +6091,12 @@
           savePageData();
         }
       });
-    
+
       const selector = createSelectorManager({
         isIgnored: (element) => Boolean(element.closest('#pinfix-root, [data-pinfix-ignore="true"]')),
         getSelectionMode: () => state.selectionMode,
         isSelectionActive: () => state.selectionActive && !state.globalNoteOpen && !state.areaCaptureActive,
+        shouldAvoidCandidate: (element) => hasExistingAnnotationForElement(element),
         onCandidateChange: ({ element }) => {
           if (state.globalNoteOpen || state.areaCaptureActive) {
             return;
@@ -5433,7 +6116,7 @@
         onAreaSelect: (rect) => addManualAnnotation(rect),
         onSelect: (element) => addSelectionItem(element)
       });
-    
+
       function setSelectionActive(active) {
         state.selectionActive = Boolean(active);
         if (!state.selectionActive) {
@@ -5442,7 +6125,7 @@
           selector.refresh();
         }
       }
-    
+
       const exporters = createExporters({
         beforeCapture: async () => {
           savePageData();
@@ -5451,24 +6134,24 @@
           render();
         },
         afterCapture: async () => {
-          state.captureHidden = state.captureMode;
+          state.captureHidden = false;
           render();
         }
       });
-    
+
       function getLanguage() {
         return i18n.resolveLanguage(state.settings.language);
       }
-    
+
       function t(key, values) {
         const template = i18n.t(getLanguage(), key);
         return values ? fillTemplate(template, values) : template;
       }
-    
+
       function getReviewSummary() {
         return getAnnotationReviewSummary(state.annotations, state.masks);
       }
-    
+
       function hydrateTemplate(template) {
         const now = Date.now();
         return {
@@ -5479,11 +6162,11 @@
           updatedAt: template && Number.isFinite(Number(template.updatedAt)) ? Number(template.updatedAt) : now
         };
       }
-    
+
       function saveTemplates() {
         return storage.saveTemplates(state.templates);
       }
-    
+
       function getTemplateSignature(templates) {
         return (Array.isArray(templates) ? templates : [])
           .map((template) => {
@@ -5497,13 +6180,13 @@
           })
           .join('\u0002');
       }
-    
+
       function refreshTemplatesFromStorage() {
         const nextTemplates = storage.loadTemplates().map((template) => hydrateTemplate(template));
         if (getTemplateSignature(nextTemplates) === getTemplateSignature(state.templates)) {
           return;
         }
-    
+
         state.templates = nextTemplates;
         state.selectedTemplateIds = getValidSelectedTemplateIds(state.selectedTemplateIds);
         if (state.activeTemplateId && !state.templates.some((template) => template.id === state.activeTemplateId)) {
@@ -5512,15 +6195,15 @@
           state.draftTemplate = null;
         }
       }
-    
+
       function hasTemplateDraftContent(template) {
         if (!template) {
           return false;
         }
-    
+
         return Boolean(String(template.title || '').trim() || String(template.content || '').trim());
       }
-    
+
       function getValidSelectedTemplateIds(templateIds) {
         const validIds = new Set(state.templates.map((template) => template.id));
         const result = [];
@@ -5532,14 +6215,14 @@
         });
         return result;
       }
-    
+
       function getCombinedBusinessNote() {
         const parts = [];
         const noteText = String(state.globalNote || '').trim();
         if (noteText) {
           parts.push(noteText);
         }
-    
+
         state.templates.forEach((template) => {
           if (!state.selectedTemplateIds.includes(template.id)) {
             return;
@@ -5549,14 +6232,14 @@
             parts.push(content);
           }
         });
-    
+
         return parts.join('\n');
       }
-    
+
       function loadPageData() {
         refreshTemplatesFromStorage();
         const pageData = storage.loadPageData(window.location.href);
-        const { launcherPosition, ...pageSettings } = pageData.pageSettings || {};
+        const { launcherPosition, launcherCustomPosition, ...pageSettings } = pageData.pageSettings || {};
         state.settings = {
           ...storage.loadGlobalSettings(),
           ...pageSettings
@@ -5571,11 +6254,11 @@
         state.activeTemplateId = '';
         state.draftTemplate = null;
         state.globalNoteHeight = pageSettings.globalNoteHeight
-          ? Math.max(pageSettings.globalNoteHeight, 500)
+          ? Math.max(pageSettings.globalNoteHeight, 360)
           : state.globalNoteHeight;
         state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
       }
-    
+
       function hydrateAnnotation(annotation) {
         const filled = {
           id: annotation.id || createId('annotation'),
@@ -5583,6 +6266,7 @@
           note: annotation.note || '',
           anchor: annotation.anchor || null,
           rect: annotation.rect || (annotation.anchor ? annotation.anchor.rect : null),
+          relativeRect: annotation.relativeRect || null,
           style: {
             colorPreset: annotation.style && annotation.style.colorPreset ? annotation.style.colorPreset : state.settings.colorPreset,
             lineWidth: annotation.style && annotation.style.lineWidth ? annotation.style.lineWidth : state.settings.lineWidth,
@@ -5592,37 +6276,40 @@
           },
           surfaceTone: annotation.surfaceTone || 'light'
         };
-    
+
         const resolved = resolveAnnotationRect(filled);
         if (resolved.rect) {
           filled.rect = resolved.rect;
         }
+        if (!filled.anchor && resolved.relativeRect) {
+          filled.relativeRect = resolved.relativeRect;
+        }
         if (resolved.element) {
           filled.surfaceTone = detectSurfaceTone(resolved.element, state.settings.contrastMode);
         }
-    
+
         return filled;
       }
-    
+
       function hydrateMask(mask) {
         const filled = {
           id: mask.id || createId('mask'),
           anchor: mask.anchor || null,
           rect: mask.rect || (mask.anchor ? mask.anchor.rect : null)
         };
-    
+
         const resolved = resolveAnnotationRect(filled);
         if (resolved.rect) {
           filled.rect = resolved.rect;
         }
-    
+
         return filled;
       }
-    
+
       function saveGlobalSettings() {
         storage.saveGlobalSettings(state.settings);
       }
-    
+
       function savePageData() {
         storage.savePageData(window.location.href, {
           annotations: state.annotations,
@@ -5636,38 +6323,38 @@
             labelStyle: state.settings.labelStyle,
             boxPadding: state.settings.boxPadding,
             contrastMode: state.settings.contrastMode,
-            countdown: state.settings.countdown,
             notesVisible: state.settings.notesVisible,
             globalNoteHeight: state.globalNoteHeight
           }
         });
       }
-    
+
       function render() {
         state.reviewSummary = getReviewSummary();
         ui.render(state);
       }
-    
+
       function showToast(keyOrText, toastOptions = {}) {
         const translated = i18n.t(getLanguage(), keyOrText);
         state.toast = {
           message: translated === keyOrText ? keyOrText : translated,
           actionName: toastOptions.actionName || '',
           actionLabel: toastOptions.actionLabelKey ? i18n.t(getLanguage(), toastOptions.actionLabelKey) : '',
-          tone: toastOptions.tone || ''
+          tone: toastOptions.tone || '',
+          anchor: toastOptions.anchor || ''
         };
         render();
-    
+
         if (toastTimer) {
           window.clearTimeout(toastTimer);
         }
-    
+
         toastTimer = window.setTimeout(() => {
           state.toast = '';
           render();
         }, toastOptions.duration || 1800);
       }
-    
+
       function takeHistorySnapshot() {
         state.history.push({
           annotations: JSON.parse(JSON.stringify(state.annotations)),
@@ -5675,23 +6362,23 @@
           globalNote: state.globalNote,
           selectedTemplateIds: [...state.selectedTemplateIds]
         });
-    
+
         if (state.history.length > 30) {
           state.history.shift();
         }
       }
-    
+
       function renumberAnnotations() {
         state.annotations.forEach((annotation, index) => {
           annotation.number = index + 1;
         });
       }
-    
+
       function refreshAnnotations(force = false) {
         if (state.globalNoteOpen && !force) {
           return;
         }
-    
+
         state.pageTone = detectSurfaceTone(document.body, state.settings.contrastMode);
         state.annotations = state.annotations.map((annotation) => hydrateAnnotation(annotation));
         state.masks = state.masks.map((mask) => hydrateMask(mask));
@@ -5700,46 +6387,46 @@
         }
         render();
       }
-    
+
       function scheduleRefreshAnnotations() {
         if (refreshScheduled) {
           return;
         }
-    
+
         refreshScheduled = true;
         window.requestAnimationFrame(() => {
           refreshScheduled = false;
           refreshAnnotations();
         });
       }
-    
+
       function clearPendingActionConfirm() {
         state.pendingActionConfirm = null;
       }
-    
+
       function clearCandidate() {
         state.candidate = null;
         state.candidateElement = null;
       }
-    
+
       function hideAnnotationNotes() {
         if (!state.activeAnnotationId && !state.editingAnnotationId) {
           return;
         }
-    
+
         state.activeAnnotationId = '';
         state.editingAnnotationId = '';
         savePageData();
         render();
       }
-    
+
       function markAnnotationFocused(id) {
         state.highlightedAnnotationId = id;
-    
+
         if (focusTimer) {
           window.clearTimeout(focusTimer);
         }
-    
+
         focusTimer = window.setTimeout(() => {
           state.highlightedAnnotationId = '';
           if (state.editingAnnotationId !== id) {
@@ -5747,52 +6434,90 @@
           }
         }, 1800);
       }
-    
+
       function addSelectionItem(element) {
         if (state.selectionMode === 'mask') {
           addMask(element);
           return;
         }
-    
+
         addAnnotation(element);
       }
-    
+
       function adjustCandidate(direction) {
         if (Number(direction) < 0) {
           selector.shrink();
           return;
         }
-    
+
         selector.expand();
       }
-    
+
       function addCandidateSelection(kind) {
         if (!state.candidateElement) {
           return;
         }
-    
+
         if (kind === 'mask') {
           addMask(state.candidateElement);
           return;
         }
-    
+
         addAnnotation(state.candidateElement);
       }
-    
+
       function findExistingAnnotation(anchor, rect) {
         return state.annotations.find((annotation) => {
           const sameSelector = anchor.selector && annotation.anchor && annotation.anchor.selector === anchor.selector;
-          return sameSelector || rectsRoughlyMatch(annotation.rect, rect);
+          return sameSelector || rectsRoughlyMatch(annotation.rect, rect) || rectsSubstantiallyMatch(annotation.rect, rect);
         }) || null;
       }
-    
+
+      function hasExistingAnnotation(anchor, rect) {
+        return Boolean(findExistingAnnotation(anchor, rect));
+      }
+
+      function hasExistingAnnotationForElement(element) {
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+
+        const rect = captureElementRect(element);
+        const selector = buildElementSelector(element);
+        return state.annotations.some((annotation) => {
+          const sameSelector = selector && annotation.anchor && annotation.anchor.selector === selector;
+          return sameSelector || rectsRoughlyMatch(annotation.rect, rect) || rectsSubstantiallyMatch(annotation.rect, rect);
+        });
+      }
+
+      function rectsSubstantiallyMatch(leftRect, rightRect) {
+        if (!leftRect || !rightRect) {
+          return false;
+        }
+
+        const leftArea = Math.max(1, leftRect.width * leftRect.height);
+        const rightArea = Math.max(1, rightRect.width * rightRect.height);
+        const sizeRatio = Math.min(leftArea, rightArea) / Math.max(leftArea, rightArea);
+        if (sizeRatio < 0.68) {
+          return false;
+        }
+
+        const overlapLeft = Math.max(leftRect.pageLeft, rightRect.pageLeft);
+        const overlapTop = Math.max(leftRect.pageTop, rightRect.pageTop);
+        const overlapRight = Math.min(leftRect.pageLeft + leftRect.width, rightRect.pageLeft + rightRect.width);
+        const overlapBottom = Math.min(leftRect.pageTop + leftRect.height, rightRect.pageTop + rightRect.height);
+        const overlapArea = Math.max(0, overlapRight - overlapLeft) * Math.max(0, overlapBottom - overlapTop);
+
+        return overlapArea / Math.min(leftArea, rightArea) > 0.82;
+      }
+
       function hasExistingMask(anchor, rect) {
         return state.masks.some((mask) => {
           const sameSelector = anchor.selector && mask.anchor && mask.anchor.selector === anchor.selector;
           return sameSelector || rectsRoughlyMatch(mask.rect, rect);
         });
       }
-    
+
       function addAnnotation(element) {
         const anchor = buildElementAnchor(element);
         const existing = findExistingAnnotation(anchor, anchor.rect);
@@ -5801,10 +6526,10 @@
           showToast('annotationExists');
           return;
         }
-    
+
         takeHistorySnapshot();
         clearPendingActionConfirm();
-    
+
         const annotation = {
           id: createId('annotation'),
           number: state.annotations.length + 1,
@@ -5820,7 +6545,7 @@
             boxPadding: state.settings.boxPadding
           }
         };
-    
+
         state.annotations.push(annotation);
         state.activeAnnotationId = annotation.id;
         state.editingAnnotationId = annotation.id;
@@ -5830,29 +6555,31 @@
         savePageData();
         render();
       }
-    
+
       function getElementAtManualRectCenter(rect) {
         const clientX = clamp(rect.pageLeft + rect.width / 2 - window.scrollX, 0, window.innerWidth - 1);
         const clientY = clamp(rect.pageTop + rect.height / 2 - window.scrollY, 0, window.innerHeight - 1);
         const element = document.elementFromPoint(clientX, clientY);
-    
+
         return element instanceof HTMLElement ? element : document.body;
       }
-    
+
       function addManualAnnotation(rect) {
         if (!rect || rect.width < 24 || rect.height < 24) {
           clearCandidate();
           render();
           return;
         }
-    
+
         const manualRect = {
           pageLeft: Math.max(0, rect.pageLeft),
           pageTop: Math.max(0, rect.pageTop),
           width: rect.width,
           height: rect.height,
           viewportWidth: rect.viewportWidth || window.innerWidth,
-          viewportHeight: rect.viewportHeight || window.innerHeight
+          viewportHeight: rect.viewportHeight || window.innerHeight,
+          documentWidth: rect.documentWidth || getDocumentSize().width,
+          documentHeight: rect.documentHeight || getDocumentSize().height
         };
         const existing = state.annotations.find((annotation) => rectsRoughlyMatch(annotation.rect, manualRect));
         if (existing) {
@@ -5861,10 +6588,10 @@
           showToast('annotationExists');
           return;
         }
-    
+
         takeHistorySnapshot();
         clearPendingActionConfirm();
-    
+
         const surfaceElement = getElementAtManualRectCenter(manualRect);
         const annotation = {
           id: createId('annotation'),
@@ -5872,6 +6599,7 @@
           note: '',
           anchor: null,
           rect: manualRect,
+          relativeRect: createRelativeAnnotationRect(manualRect),
           surfaceTone: detectSurfaceTone(surfaceElement, state.settings.contrastMode),
           style: {
             colorPreset: state.settings.colorPreset,
@@ -5881,7 +6609,7 @@
             boxPadding: state.settings.boxPadding
           }
         };
-    
+
         state.annotations.push(annotation);
         state.activeAnnotationId = annotation.id;
         state.editingAnnotationId = annotation.id;
@@ -5891,14 +6619,39 @@
         savePageData();
         render();
       }
-    
+
+      function resizeAnnotation(id, rect) {
+        const annotation = state.annotations.find((item) => item.id === id);
+        if (!annotation || !rect) {
+          return;
+        }
+
+        const nextRect = normaliseAnnotationRect(rect, 24);
+        if (rectsRoughlyMatch(annotation.rect, nextRect)) {
+          return;
+        }
+
+        takeHistorySnapshot();
+        annotation.anchor = null;
+        annotation.rect = nextRect;
+        annotation.relativeRect = createRelativeAnnotationRect(nextRect);
+        annotation.surfaceTone = detectSurfaceTone(getElementAtManualRectCenter(nextRect), state.settings.contrastMode);
+        state.activeAnnotationId = id;
+        if (state.editingAnnotationId && state.editingAnnotationId !== id) {
+          state.editingAnnotationId = '';
+        }
+        clearPendingActionConfirm();
+        savePageData();
+        render();
+      }
+
       function addMask(element) {
         const anchor = buildElementAnchor(element);
         if (hasExistingMask(anchor, anchor.rect)) {
           showToast('maskExists');
           return;
         }
-    
+
         takeHistorySnapshot();
         clearPendingActionConfirm();
         state.masks.push({
@@ -5909,31 +6662,31 @@
         state.selectionMode = 'annotate';
         state.activePopover = null;
         clearCandidate();
-    
+
         savePageData();
         render();
         showToast('privacyMaskAdded');
       }
-    
+
       function updateNote(id, value, saveNow) {
         const annotation = state.annotations.find((item) => item.id === id);
         if (!annotation) {
           return;
         }
-    
+
         annotation.note = value;
         clearPendingActionConfirm();
         if (saveNow) {
           savePageData();
         }
       }
-    
+
       function activateAnnotation(id, editNow) {
         const annotation = state.annotations.find((item) => item.id === id);
         if (!annotation) {
           return;
         }
-    
+
         // Only one note panel should be open at a time, so dense annotations do not cover the page.
         state.activeAnnotationId = id;
         state.editingAnnotationId = editNow ? id : '';
@@ -5944,22 +6697,22 @@
         savePageData();
         render();
       }
-    
+
       function editAnnotation(id) {
         activateAnnotation(id, true);
       }
-    
+
       function maskAnnotation(id) {
         const annotation = state.annotations.find((item) => item.id === id);
         if (!annotation) {
           return;
         }
-    
+
         if (hasExistingMask(annotation.anchor || {}, annotation.rect)) {
           showToast('maskExists');
           return;
         }
-    
+
         takeHistorySnapshot();
         state.masks.push({
           id: createId('mask'),
@@ -5971,20 +6724,20 @@
         render();
         showToast('privacyMaskAdded');
       }
-    
+
       function adjustMask(id, delta) {
         const mask = state.masks.find((item) => item.id === id);
         if (!mask || !mask.rect) {
           return;
         }
-    
+
         const amount = Number(delta);
         const nextWidth = mask.rect.width + amount * 2;
         const nextHeight = mask.rect.height + amount * 2;
         if (nextWidth < 16 || nextHeight < 16) {
           return;
         }
-    
+
         takeHistorySnapshot();
         mask.rect = {
           ...mask.rect,
@@ -5998,13 +6751,13 @@
         savePageData();
         render();
       }
-    
+
       function updateGlobalNote(value) {
         state.globalNote = value;
         clearPendingActionConfirm();
         savePageData();
       }
-    
+
       function toggleGlobalPanel(next) {
         const nextOpen = typeof next === 'boolean' ? next : !state.globalNoteOpen;
         if (!nextOpen) {
@@ -6024,7 +6777,7 @@
         }
         render();
       }
-    
+
       function showGlobalNoteView() {
         commitGlobalTemplateDraft(false);
         state.globalNoteView = 'note';
@@ -6032,14 +6785,14 @@
         state.draftTemplate = null;
         render();
       }
-    
+
       function showGlobalTemplate(id) {
         commitGlobalTemplateDraft(false);
         const template = state.templates.find((item) => item.id === id);
         if (!template) {
           return;
         }
-    
+
         state.globalNoteView = 'template';
         state.activeTemplateId = id;
         state.draftTemplate = {
@@ -6048,7 +6801,7 @@
         };
         render();
       }
-    
+
       function createGlobalTemplateDraft() {
         commitGlobalTemplateDraft(false);
         state.globalNoteView = 'template';
@@ -6059,33 +6812,33 @@
         };
         render();
       }
-    
+
       function updateGlobalTemplateDraft(field, value) {
         if (field !== 'title' && field !== 'content') {
           return;
         }
-    
+
         if (!state.draftTemplate) {
           state.draftTemplate = {
             title: '',
             content: ''
           };
         }
-    
+
         state.draftTemplate[field] = value;
         clearPendingActionConfirm();
       }
-    
+
       function commitGlobalTemplateDraft(shouldRender = true, commitOptions = {}) {
         if (!state.draftTemplate) {
           return;
         }
-    
+
         const draft = {
           title: typeof state.draftTemplate.title === 'string' ? state.draftTemplate.title : '',
           content: typeof state.draftTemplate.content === 'string' ? state.draftTemplate.content : ''
         };
-    
+
         if (!state.activeTemplateId) {
           if (!hasTemplateDraftContent(draft)) {
             if (commitOptions.keepEmptyDraft) {
@@ -6098,7 +6851,7 @@
             }
             return;
           }
-    
+
           const now = Date.now();
           const template = hydrateTemplate({
             id: createId('template'),
@@ -6119,7 +6872,7 @@
           }
           return;
         }
-    
+
         const template = state.templates.find((item) => item.id === state.activeTemplateId);
         if (!template) {
           state.draftTemplate = null;
@@ -6130,11 +6883,11 @@
           }
           return;
         }
-    
+
         if (template.title === draft.title && template.content === draft.content) {
           return;
         }
-    
+
         template.title = draft.title;
         template.content = draft.content;
         template.updatedAt = Date.now();
@@ -6143,21 +6896,21 @@
           render();
         }
       }
-    
+
       function deleteGlobalTemplate(id) {
         if (id === state.activeTemplateId) {
           commitGlobalTemplateDraft(false);
         }
-    
+
         const template = state.templates.find((item) => item.id === id);
         if (!template) {
           return;
         }
-    
+
         if (!window.confirm(i18n.t(getLanguage(), 'templateDeleteConfirm'))) {
           return;
         }
-    
+
         state.templates = state.templates.filter((item) => item.id !== id);
         state.selectedTemplateIds = state.selectedTemplateIds.filter((templateId) => templateId !== id);
         state.activeTemplateId = '';
@@ -6167,24 +6920,24 @@
         savePageData();
         render();
       }
-    
+
       function toggleGlobalTemplateSelection(id) {
         if (!state.templates.some((template) => template.id === id)) {
           return;
         }
-    
+
         if (state.selectedTemplateIds.includes(id)) {
           state.selectedTemplateIds = state.selectedTemplateIds.filter((templateId) => templateId !== id);
         } else {
           state.selectedTemplateIds = [...state.selectedTemplateIds, id];
         }
-    
+
         state.selectedTemplateIds = getValidSelectedTemplateIds(state.selectedTemplateIds);
         clearPendingActionConfirm();
         savePageData();
         render();
       }
-    
+
       function deleteAnnotation(id) {
         takeHistorySnapshot();
         state.annotations = state.annotations.filter((item) => item.id !== id);
@@ -6200,7 +6953,7 @@
         render();
         showToast('deleted');
       }
-    
+
       function deleteMask(id) {
         takeHistorySnapshot();
         state.masks = state.masks.filter((item) => item.id !== id);
@@ -6208,12 +6961,12 @@
         savePageData();
         render();
       }
-    
+
       function clearPage() {
-        if (!window.confirm(i18n.t(getLanguage(), 'clearConfirm'))) {
+        if (!state.annotations.length && !state.masks.length && !state.globalNote && !state.selectedTemplateIds.length) {
           return;
         }
-    
+
         takeHistorySnapshot();
         state.annotations = [];
         state.masks = [];
@@ -6224,18 +6977,21 @@
         clearPendingActionConfirm();
         savePageData();
         render();
-        showToast('pageCleared');
+        showToast('pageClearedUndoHint', {
+          anchor: 'clear-page',
+          duration: 3600
+        });
       }
-    
+
       function clearMasks() {
         if (!state.masks.length) {
           return;
         }
-    
+
         if (!window.confirm(i18n.t(getLanguage(), 'clearMasksConfirm'))) {
           return;
         }
-    
+
         takeHistorySnapshot();
         state.masks = [];
         clearPendingActionConfirm();
@@ -6243,13 +6999,13 @@
         render();
         showToast('privacyMasksCleared');
       }
-    
+
       function undo() {
         const snapshot = state.history.pop();
         if (!snapshot) {
           return;
         }
-    
+
         state.annotations = snapshot.annotations.map((annotation) => hydrateAnnotation(annotation));
         state.masks = (snapshot.masks || []).map((mask) => hydrateMask(mask));
         state.globalNote = snapshot.globalNote;
@@ -6261,13 +7017,13 @@
         render();
         showToast('restored');
       }
-    
+
       function focusAnnotation(id) {
         const annotation = state.annotations.find((item) => item.id === id);
         if (!annotation) {
           return;
         }
-    
+
         const top = Math.max(annotation.rect.pageTop - 120, 0);
         window.scrollTo({ top, behavior: 'smooth' });
         state.activeAnnotationId = id;
@@ -6279,7 +7035,7 @@
         render();
         showToast('focusDone');
       }
-    
+
       function toggleOpen(forceValue) {
         const nextOpen = typeof forceValue === 'boolean' ? forceValue : !state.open;
         if (!nextOpen) {
@@ -6289,58 +7045,65 @@
         }
         state.open = nextOpen;
         state.activePopover = null;
-        state.tool = state.settings.lastTool || 'select';
+        state.tool = getRestoredTool();
         setSelectionActive(true);
-    
+
         if (nextOpen && state.tool === 'select') {
           selector.enable();
         } else {
           selector.disable();
           state.selectionMode = 'annotate';
           if (!nextOpen) {
-            if (countdownTimer) {
-              window.clearInterval(countdownTimer);
-              countdownTimer = null;
-            }
             state.activeAnnotationId = '';
             state.editingAnnotationId = '';
             state.globalNoteOpen = false;
-            state.captureMode = false;
             state.captureHidden = false;
             state.areaCaptureActive = false;
-            state.countdownRemaining = 0;
             state.toast = '';
             setSelectionActive(false);
             clearCandidate();
           }
         }
-    
+
         render();
       }
-    
+
+      function getRestoredTool() {
+        if (state.settings.lastTool !== 'select') {
+          state.settings.lastTool = 'select';
+          saveGlobalSettings();
+        }
+        return 'select';
+      }
+
       function handleTool(tool) {
         if (!state.open) {
           state.open = true;
         }
-    
-        if (tool === 'copy') {
-          copyNotes();
-          return;
-        }
-    
-        if (tool === 'capture') {
-          selector.disable();
-          setSelectionActive(false);
-          clearCandidate();
-          state.tool = 'capture';
-          state.settings.lastTool = 'capture';
-          state.activePopover = state.activePopover === 'capture' ? null : 'capture';
-          state.areaCaptureActive = false;
+
+        if (!['select', 'capture', 'copy'].includes(tool)) {
+          state.tool = 'select';
+          state.settings.lastTool = 'select';
+          state.activePopover = null;
+          setSelectionActive(true);
+          selector.enable();
           saveGlobalSettings();
           render();
           return;
         }
-    
+
+        if (tool === 'copy') {
+          copyNotes();
+          return;
+        }
+
+        if (tool === 'capture') {
+          state.settings.lastTool = 'select';
+          saveGlobalSettings();
+          startAreaCapture();
+          return;
+        }
+
         if (tool === 'select') {
           state.tool = 'select';
           state.settings.lastTool = 'select';
@@ -6357,47 +7120,53 @@
           render();
           return;
         }
-    
-        selector.disable();
-        setSelectionActive(false);
-        state.tool = tool;
-        state.settings.lastTool = tool;
-        state.activePopover = state.activePopover === tool ? null : tool;
-        saveGlobalSettings();
-        render();
+
       }
-    
+
       function updateSetting(key, value) {
-        const nextValue = key === 'countdown' ? Number(value) : value;
-        state.settings[key] = nextValue;
+        state.settings[key] = value;
+        if (key === 'launcherPosition' && value !== 'custom') {
+          state.settings.launcherCustomPosition = null;
+        }
         saveGlobalSettings();
         savePageData();
-    
+
         if (key === 'contrastMode') {
           refreshAnnotations(true);
           return;
         }
-    
+
         render();
       }
-    
+
+      function moveLauncher(position) {
+        if (!position) {
+          return;
+        }
+
+        state.settings.launcherPosition = 'custom';
+        state.settings.launcherCustomPosition = position;
+        saveGlobalSettings();
+        render();
+      }
+
       function confirmProceedWithIncompleteNotes(actionName) {
         const summary = getReviewSummary();
         if (!summary.missingCount) {
           clearPendingActionConfirm();
           return true;
         }
-    
+
         const now = Date.now();
         const confirmed = state.pendingActionConfirm
           && state.pendingActionConfirm.actionName === actionName
           && state.pendingActionConfirm.expiresAt > now;
-    
+
         if (confirmed) {
           clearPendingActionConfirm();
           return true;
         }
-    
+
         state.pendingActionConfirm = {
           actionName,
           expiresAt: now + 5000
@@ -6405,7 +7174,7 @@
         showToast(t('reviewContinue', { count: summary.missingCount }));
         return false;
       }
-    
+
       function setSelectionMode(mode) {
         state.selectionMode = mode;
         setSelectionActive(true);
@@ -6417,12 +7186,12 @@
         saveGlobalSettings();
         render();
       }
-    
+
       function toggleSection(section) {
         state.expandedSections[section] = !state.expandedSections[section];
         render();
       }
-    
+
       function togglePrivacyMode() {
         if (state.selectionMode === 'mask') {
           state.selectionMode = 'annotate';
@@ -6431,11 +7200,11 @@
           showToast('privacyModeOff');
           return;
         }
-    
+
         setSelectionMode('mask');
         showToast('privacyModeOn');
       }
-    
+
       async function copyNotes() {
         commitGlobalTemplateDraft(false);
         refreshTemplatesFromStorage();
@@ -6444,11 +7213,11 @@
           showToast('nothingToCopy');
           return;
         }
-    
+
         if (!confirmProceedWithIncompleteNotes('copy-notes')) {
           return;
         }
-    
+
         try {
           savePageData();
           await exporters.copyNotes({
@@ -6462,72 +7231,41 @@
           showToast('copyFailed');
         }
       }
-    
-      async function exportImage(preferClipboard) {
-        if (captureInProgress) {
-          return;
-        }
-    
-        if (!confirmProceedWithIncompleteNotes(preferClipboard ? 'copy-image' : 'export-image')) {
-          return;
-        }
-    
-        captureInProgress = true;
-        try {
-          const result = await exporters.exportViewportImage({
-            preferClipboard
-          });
-          lastScreenshotBlob = result.blob || null;
-          if (preferClipboard) {
-            showToast(result.copied ? 'copiedImage' : 'screenshotDownloadedFallback', {
-              duration: result.copied ? 1800 : 6500,
-              tone: result.copied ? '' : 'success'
-            });
-            return;
-          }
-    
-          showToast('downloadedImage');
-        } catch (error) {
-          showToast(i18n.t(getLanguage(), 'exportLimit'));
-        } finally {
-          captureInProgress = false;
-        }
-      }
-    
+
       function startAreaCapture() {
         if (!state.open) {
           state.open = true;
         }
-    
-        if (state.captureMode || countdownTimer) {
-          stopScreenshotMode(false);
-        }
-    
+
         if (document.activeElement && typeof document.activeElement.blur === 'function') {
           document.activeElement.blur();
         }
-    
+
         if (state.globalNoteOpen) {
           commitGlobalTemplateDraft(false);
         }
-    
+
         selector.disable();
         setSelectionActive(false);
         clearCandidate();
         state.tool = 'capture';
+        state.settings.lastTool = 'select';
         state.activePopover = null;
         state.globalNoteOpen = false;
         state.areaCaptureActive = true;
+        saveGlobalSettings();
         render();
       }
-    
+
       function cancelAreaCapture(messageKey) {
         if (!state.areaCaptureActive) {
           return;
         }
-    
+
         state.areaCaptureActive = false;
         state.tool = 'select';
+        state.settings.lastTool = 'select';
+        saveGlobalSettings();
         if (state.tool === 'select' && state.open) {
           setSelectionActive(true);
           selector.enable();
@@ -6538,35 +7276,37 @@
           showToast(messageKey);
         }
       }
-    
+
       async function captureAreaScreenshot(rect) {
         if (captureInProgress) {
           return;
         }
-    
+
         const selectedRect = rect && {
           x: Math.max(0, Number(rect.x) || 0),
           y: Math.max(0, Number(rect.y) || 0),
           width: Math.max(0, Number(rect.width) || 0),
           height: Math.max(0, Number(rect.height) || 0)
         };
-    
+
         if (!selectedRect || selectedRect.width < 8 || selectedRect.height < 8) {
           cancelAreaCapture('areaCaptureTooSmall');
           return;
         }
-    
+
         const deferredClipboard = exporters.createDeferredPngClipboardItem();
         state.areaCaptureActive = false;
         state.tool = 'select';
+        state.settings.lastTool = 'select';
         state.activePopover = null;
+        saveGlobalSettings();
         if (state.tool === 'select' && state.open) {
           setSelectionActive(true);
           selector.enable();
           selector.refresh();
         }
         render();
-    
+
         captureInProgress = true;
         try {
           const result = await exporters.exportViewportImage({
@@ -6574,18 +7314,12 @@
             deferredClipboard,
             rect: selectedRect
           });
-          lastScreenshotBlob = result.blob || null;
-    
+
           if (result.copied) {
-            showToast('screenshotCopiedPaste', {
-              actionName: 'save-last-screenshot',
-              actionLabelKey: 'saveLocally',
-              duration: 6500,
-              tone: 'success'
-            });
+            showToast('screenshotCopiedPaste', { duration: 6500, tone: 'success' });
             return;
           }
-    
+
           showToast('screenshotDownloadedFallback', {
             duration: 6500,
             tone: 'success'
@@ -6599,59 +7333,7 @@
           captureInProgress = false;
         }
       }
-    
-      function saveLastScreenshot() {
-        if (!lastScreenshotBlob) {
-          showToast('noRecentScreenshot');
-          return;
-        }
-    
-        exporters.downloadBlob(lastScreenshotBlob, `pinfix-${Date.now()}.png`);
-        showToast('downloadedImage');
-      }
-    
-      function stopScreenshotMode(notify) {
-        if (countdownTimer) {
-          window.clearInterval(countdownTimer);
-          countdownTimer = null;
-        }
-    
-        state.captureMode = false;
-        state.captureHidden = false;
-        state.countdownRemaining = 0;
-        render();
-    
-        if (notify) {
-          showToast('screenshotDone');
-        }
-      }
-    
-      function startScreenshotMode() {
-        if (countdownTimer) {
-          window.clearInterval(countdownTimer);
-        }
-    
-        if (!confirmProceedWithIncompleteNotes('screenshot-mode')) {
-          return;
-        }
-    
-        state.activePopover = null;
-        state.captureMode = true;
-        state.captureHidden = true;
-        state.countdownRemaining = state.settings.countdown;
-        render();
-        showToast('screenshotReady');
-    
-        countdownTimer = window.setInterval(() => {
-          state.countdownRemaining -= 1;
-          if (state.countdownRemaining <= 0) {
-            stopScreenshotMode(true);
-            return;
-          }
-          render();
-        }, 1000);
-      }
-    
+
       function runNamedAction(name) {
         if (name === 'close-pinfix') {
           toggleOpen(false);
@@ -6681,67 +7363,39 @@
         }
         if (name === 'clear-masks') {
           clearMasks();
-          return;
-        }
-        if (name === 'screenshot-mode') {
-          startScreenshotMode();
-          return;
-        }
-        if (name === 'export-image') {
-          exportImage(false);
-          return;
-        }
-        if (name === 'copy-image') {
-          exportImage(true);
-          return;
-        }
-        if (name === 'save-last-screenshot') {
-          saveLastScreenshot();
         }
       }
-    
+
       function handleWindowKeydown(event) {
         if (state.areaCaptureActive && event.key === 'Escape') {
           event.preventDefault();
           cancelAreaCapture('areaCaptureCanceled');
           return;
         }
-    
+
         if (isEditableTarget(event.target)) {
           return;
         }
-    
+
         if (!state.open) {
           return;
         }
-    
+
         const withCommand = event.ctrlKey || event.metaKey;
         const withShift = event.shiftKey;
-    
+
         if (withCommand && event.key.toLowerCase() === 'z') {
           event.preventDefault();
           undo();
           return;
         }
-    
+
         if (withCommand && withShift && event.key.toLowerCase() === 'c') {
           event.preventDefault();
           copyNotes();
           return;
         }
-    
-        if (withCommand && withShift && event.key.toLowerCase() === 's') {
-          event.preventDefault();
-          startScreenshotMode();
-          return;
-        }
-    
-        if (withCommand && withShift && event.key.toLowerCase() === 'e') {
-          event.preventDefault();
-          exportImage(false);
-          return;
-        }
-    
+
         if (withCommand && withShift && event.key.toLowerCase() === 'h') {
           event.preventDefault();
           state.settings.notesVisible = !state.settings.notesVisible;
@@ -6753,29 +7407,24 @@
           render();
           return;
         }
-    
+
         if (event.key === 'Escape') {
-          if (state.captureMode) {
-            stopScreenshotMode(false);
-            return;
-          }
-    
           if (state.activePopover) {
             state.activePopover = null;
             render();
             return;
           }
-    
+
           toggleOpen(false);
         }
       }
-    
+
       function handleRouteChange() {
         const nextUrl = storage.normaliseUrl(window.location.href);
         if (nextUrl === lastUrl) {
           return;
         }
-    
+
         commitGlobalTemplateDraft(false);
         savePageData();
         lastUrl = nextUrl;
@@ -6783,17 +7432,17 @@
         clearPendingActionConfirm();
         render();
       }
-    
+
       function handleBeforeUnload() {
         commitGlobalTemplateDraft(false);
         savePageData();
       }
-    
+
       function attachRouteWatcher() {
         if (routeWatcherAttached) {
           return;
         }
-    
+
         routeWatcherAttached = true;
         const wrapHistory = (methodName) => {
           const original = window.history[methodName];
@@ -6803,70 +7452,73 @@
             return result;
           };
         };
-    
+
         wrapHistory('pushState');
         wrapHistory('replaceState');
         window.addEventListener('popstate', handleRouteChange);
         window.addEventListener('hashchange', handleRouteChange);
       }
-    
+
       function init() {
         loadPageData();
         ui.mount();
         render();
         attachRouteWatcher();
-    
+
         window.addEventListener('resize', scheduleRefreshAnnotations);
         window.addEventListener('scroll', scheduleRefreshAnnotations, { passive: true });
         window.addEventListener('beforeunload', handleBeforeUnload);
         window.addEventListener('keydown', handleWindowKeydown, true);
       }
-    
+
       function reloadGlobalSettings() {
         state.settings = {
           ...state.settings,
           ...storage.loadGlobalSettings()
         };
+        if (state.settings.launcherPosition !== 'custom') {
+          state.settings.launcherCustomPosition = null;
+        }
         savePageData();
         refreshAnnotations(true);
       }
-    
+
       function reloadPageData() {
         loadPageData();
         render();
       }
-    
+
       return {
         init,
         reloadGlobalSettings,
         reloadPageData
       };
     }
-    
+
     (function bootstrapPinFix() {
       if (window.__pinfixInitialized__ || window.__pinfixBootstrapping__) {
         return;
       }
-    
+
       window.__pinfixBootstrapping__ = true;
-    
+
       const start = () => {
         if (window.__pinfixInitialized__) {
           return;
         }
-    
+
         if (!document.documentElement || !document.head || !document.body) {
           window.setTimeout(start, 50);
           return;
         }
-    
+
         window.__pinfixInitialized__ = true;
         window.__pinfixBootstrapping__ = false;
         const app = createPinFixApp();
         window.__pinfixApp__ = app;
         app.init();
       };
-    
+
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', start, { once: true });
       } else {

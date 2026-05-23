@@ -52,10 +52,23 @@ function getViewportRect() {
 function getDocumentSize() {
   const doc = document.documentElement;
   const body = document.body;
+  const pinfixRoot = document.getElementById('pinfix-root');
+  const previousDisplay = pinfixRoot ? pinfixRoot.style.display : '';
+
+  if (pinfixRoot) {
+    pinfixRoot.style.display = 'none';
+  }
+
+  const width = Math.max(doc.scrollWidth, doc.clientWidth, body ? body.scrollWidth : 0);
+  const height = Math.max(doc.scrollHeight, doc.clientHeight, body ? body.scrollHeight : 0);
+
+  if (pinfixRoot) {
+    pinfixRoot.style.display = previousDisplay;
+  }
 
   return {
-    width: Math.max(doc.scrollWidth, doc.clientWidth, body ? body.scrollWidth : 0),
-    height: Math.max(doc.scrollHeight, doc.clientHeight, body ? body.scrollHeight : 0)
+    width,
+    height
   };
 }
 

@@ -41,6 +41,10 @@ function getPinFixStyles() {
   pointer-events: auto;
 }
 
+#pinfix-root[data-launcher-position="custom"] .pinfix-chrome {
+  transform: none;
+}
+
 #pinfix-root[data-launcher-position="right-center"] .pinfix-chrome {
   left: auto;
   right: 12px;
@@ -122,12 +126,52 @@ function getPinFixStyles() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 8px 8px;
+  padding: 8px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(15, 118, 110, 0.18);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
   backdrop-filter: blur(14px);
+}
+
+.pinfix-toolbar-grip-row {
+  display: grid;
+  grid-template-columns: 1fr 26px;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.pinfix-toolbar-grip,
+.pinfix-toolbar-close {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  background: rgba(248, 250, 252, 0.9);
+  color: #0f766e;
+  box-shadow: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.pinfix-toolbar-grip {
+  border-radius: 10px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pinfix-toolbar-grip:active,
+.pinfix-chrome.is-dragging .pinfix-toolbar-grip {
+  cursor: grabbing;
+}
+
+.pinfix-toolbar-grip span {
+  width: 18px;
+  height: 1px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.58;
 }
 
 .pinfix-tool-button {
@@ -142,25 +186,9 @@ function getPinFixStyles() {
 }
 
 .pinfix-toolbar-close {
-  position: absolute;
-  right: -7px;
-  top: -7px;
-  width: 22px;
-  height: 22px;
+  border-radius: 10px;
   padding: 0;
-  border: 1px solid rgba(15, 118, 110, 0.2);
-  border-radius: 999px;
-  background: #ffffff;
-  color: #0f766e;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  opacity: 0;
-  visibility: hidden;
-  transform: scale(0.92);
-  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
-  z-index: 2;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
 .pinfix-icon {
@@ -183,13 +211,6 @@ function getPinFixStyles() {
   height: 12px;
 }
 
-.pinfix-toolbar:hover .pinfix-toolbar-close,
-.pinfix-toolbar:focus-within .pinfix-toolbar-close {
-  opacity: 1;
-  visibility: visible;
-  transform: scale(1);
-}
-
 .pinfix-launcher:hover::before {
   background: rgba(222, 247, 244, 0.96);
 }
@@ -198,19 +219,66 @@ function getPinFixStyles() {
   background: rgba(222, 247, 244, 0.96);
 }
 
-.pinfix-tool-danger {
-  color: #b91c1c;
-  border-color: rgba(225, 29, 46, 0.18);
-  background: rgba(255, 241, 242, 0.94);
-}
-
-.pinfix-tool-danger:hover {
-  background: rgba(254, 226, 226, 0.96);
+.pinfix-toolbar-grip:hover,
+.pinfix-toolbar-close:hover {
+  background: rgba(222, 247, 244, 0.96);
 }
 
 .pinfix-tool-button.is-active {
   background: #0f766e;
   color: #ffffff;
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-launcher::before {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(94, 234, 212, 0.34);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-launcher::after {
+  background: #5eead4;
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.16);
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-launcher:hover::before {
+  background: rgba(30, 41, 59, 0.94);
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-toolbar {
+  background: rgba(17, 24, 39, 0.96);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-tool-button {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #ccfbf1;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-tool-button:hover {
+  background: rgba(51, 65, 85, 0.94);
+  border-color: rgba(94, 234, 212, 0.5);
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-tool-button.is-active {
+  background: #5eead4;
+  border-color: rgba(153, 246, 228, 0.92);
+  color: #042f2e;
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-grip,
+#pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-close {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #ccfbf1;
+}
+
+#pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-grip:hover,
+#pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-close:hover {
+  background: rgba(51, 65, 85, 0.94);
+  border-color: rgba(94, 234, 212, 0.5);
 }
 
 .pinfix-popover {
@@ -233,10 +301,6 @@ function getPinFixStyles() {
 
 .pinfix-popover[data-panel="more"] {
   width: 320px;
-}
-
-.pinfix-popover[data-panel="style"] {
-  width: min(430px, calc(100vw - 24px));
 }
 
 .pinfix-sidecar {
@@ -401,15 +465,15 @@ function getPinFixStyles() {
 
 .pinfix-list button.pinfix-danger-action {
   flex-basis: 100%;
-  border-color: rgba(225, 29, 46, 0.28);
-  background: rgba(225, 29, 46, 0.07);
-  color: #b91c1c;
+  border-color: rgba(15, 118, 110, 0.24);
+  background: rgba(248, 250, 252, 0.92);
+  color: #0f766e;
   font-weight: 700;
 }
 
 .pinfix-list button.pinfix-danger-action:hover {
-  border-color: rgba(225, 29, 46, 0.42);
-  background: rgba(225, 29, 46, 0.11);
+  border-color: rgba(15, 118, 110, 0.38);
+  background: rgba(222, 247, 244, 0.96);
 }
 
 .pinfix-danger-hint {
@@ -471,8 +535,62 @@ function getPinFixStyles() {
 }
 
 .pinfix-annotation-box.is-interactive {
-  cursor: pointer;
   pointer-events: auto;
+}
+
+.pinfix-annotation-box.is-resizing {
+  pointer-events: auto;
+  opacity: 0.36;
+}
+
+.pinfix-annotation-resize-preview {
+  position: absolute;
+  z-index: 7;
+  border-radius: 14px;
+  background: rgba(225, 29, 46, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.78) inset, 0 14px 32px rgba(225, 29, 46, 0.22);
+  pointer-events: none;
+  will-change: left, top, width, height;
+}
+
+.pinfix-annotation-resize-edge {
+  position: absolute;
+  display: block;
+  pointer-events: auto;
+  touch-action: none;
+  opacity: 0;
+}
+
+.pinfix-annotation-resize-edge.is-top,
+.pinfix-annotation-resize-edge.is-bottom {
+  left: 0;
+  width: 100%;
+  height: 12px;
+  cursor: ns-resize;
+}
+
+.pinfix-annotation-resize-edge.is-top {
+  top: -6px;
+}
+
+.pinfix-annotation-resize-edge.is-bottom {
+  bottom: -6px;
+}
+
+.pinfix-annotation-resize-edge.is-left,
+.pinfix-annotation-resize-edge.is-right {
+  top: 0;
+  width: 12px;
+  height: 100%;
+  cursor: ew-resize;
+}
+
+.pinfix-annotation-resize-edge.is-left {
+  left: -6px;
+}
+
+.pinfix-annotation-resize-edge.is-right {
+  right: -6px;
 }
 
 .pinfix-annotation-box.is-active {
@@ -656,7 +774,6 @@ function getPinFixStyles() {
 .pinfix-note-card,
 .pinfix-global-panel,
 .pinfix-global-strip,
-.pinfix-countdown,
 .pinfix-toast {
   position: fixed;
   pointer-events: auto;
@@ -715,7 +832,7 @@ function getPinFixStyles() {
   transform: translateX(-50%);
   display: grid;
   gap: 4px;
-  min-width: min(420px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
   padding: 12px 16px;
   border-radius: 16px;
   border: 1px solid rgba(153, 246, 228, 0.46);
@@ -733,6 +850,7 @@ function getPinFixStyles() {
 .pinfix-area-capture-hint span {
   color: rgba(226, 232, 240, 0.86);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .pinfix-area-capture-selection {
@@ -762,7 +880,6 @@ function getPinFixStyles() {
 .pinfix-note-card.is-dark,
 .pinfix-global-panel.is-dark,
 .pinfix-global-strip.is-dark,
-.pinfix-countdown.is-dark,
 .pinfix-toast.is-dark {
   background: rgba(15, 23, 42, 0.88);
   color: #f8fafc;
@@ -885,7 +1002,7 @@ function getPinFixStyles() {
   bottom: 12px;
   transform: translateX(-50%);
   width: min(820px, calc(100vw - 32px));
-  min-height: min(500px, calc(100vh - 32px));
+  min-height: min(360px, calc(100vh - 32px));
   max-height: calc(100vh - 32px);
   border-radius: 18px;
   padding: 16px 16px 14px;
@@ -909,14 +1026,15 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-scroll {
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
+  max-width: calc(100% - 50px);
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 3px 2px 8px;
+  padding: 2px 2px 4px;
   scrollbar-width: none;
 }
 
@@ -947,9 +1065,10 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-template-add {
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -968,10 +1087,10 @@ function getPinFixStyles() {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto;
   overflow: hidden;
   overflow-x: hidden;
-  padding: 2px 2px 0;
+  padding: 0 2px;
   overscroll-behavior: contain;
 }
 
@@ -987,7 +1106,7 @@ function getPinFixStyles() {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 6px 12px 12px 6px;
+  padding: 2px 10px 8px 4px;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
@@ -1003,6 +1122,10 @@ function getPinFixStyles() {
   font-size: 12px;
   line-height: 1.5;
   color: #64748b;
+  flex: 0 0 auto;
+}
+
+.pinfix-global-editor-top .pinfix-global-helper {
   flex: 1;
 }
 
@@ -1011,7 +1134,7 @@ function getPinFixStyles() {
   flex-direction: column;
   flex: 0 0 auto;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 6px;
   padding-top: 8px;
   border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
@@ -1023,12 +1146,12 @@ function getPinFixStyles() {
 }
 
 .pinfix-global-input {
-  min-height: 160px;
+  min-height: 120px;
 }
 
 .pinfix-global-note-input {
-  flex: 1;
-  min-height: 180px;
+  flex: 1 1 auto;
+  min-height: 128px;
 }
 
 .pinfix-global-template-title {
@@ -1135,7 +1258,7 @@ function getPinFixStyles() {
   border-radius: 999px;
   padding: 0 14px;
   cursor: pointer;
-  color: #b91c1c;
+  color: inherit;
   white-space: nowrap;
   transition: background 160ms ease, border-color 160ms ease;
 }
@@ -1190,6 +1313,11 @@ function getPinFixStyles() {
   gap: 10px;
 }
 
+.pinfix-toast.is-anchored {
+  right: auto;
+  top: auto;
+}
+
 .pinfix-toast.is-success {
   border-color: rgba(15, 118, 110, 0.26);
   background: rgba(240, 253, 250, 0.96);
@@ -1206,20 +1334,6 @@ function getPinFixStyles() {
   font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
-}
-
-.pinfix-countdown {
-  z-index: 65;
-  right: 16px;
-  bottom: 16px;
-  border-radius: 999px;
-  padding: 10px 14px;
-  font-size: 13px;
-}
-
-.pinfix-countdown strong {
-  font-size: 18px;
-  margin-left: 8px;
 }
 
 .pinfix-hidden {
@@ -1299,11 +1413,23 @@ function getPinFixStyles() {
 
   .pinfix-toolbar {
     flex-direction: row;
+    flex: 0 1 auto;
     max-width: calc(100vw - 24px);
     overflow-x: auto;
     padding: 8px;
     border-radius: 14px;
     scrollbar-width: none;
+  }
+
+  .pinfix-toolbar-grip-row {
+    flex: 0 0 84px;
+    grid-template-columns: 1fr 34px;
+    min-height: 44px;
+  }
+
+  .pinfix-toolbar-grip,
+  .pinfix-toolbar-close {
+    height: 44px;
   }
 
   .pinfix-toolbar::-webkit-scrollbar {
@@ -1317,8 +1443,6 @@ function getPinFixStyles() {
   }
 
   .pinfix-toolbar-close {
-    opacity: 1;
-    visibility: visible;
     transform: none;
   }
 
