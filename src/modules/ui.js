@@ -11,6 +11,7 @@ function createUI(options) {
   let sidecar = null;
   let candidate = null;
   let tooltipTarget = null;
+  let tooltipTimer = null;
   let sidecarOpen = false;
   let sidecarLocked = false;
   let sidecarCloseTimer = null;
@@ -25,6 +26,7 @@ function createUI(options) {
   let pendingTextSelection = null;
   let pendingGlobalPanelScroll = null;
   const viewportMargin = 12;
+  const tooltipHoverDelay = 420;
 
   function getLanguage() {
     return options.getLanguage();
@@ -130,6 +132,7 @@ function createUI(options) {
     }
 
     clearAreaCaptureDraft();
+    clearTooltipTimer();
     cancelSidecarClose();
     clearToolbarDrag();
 
@@ -727,7 +730,7 @@ function createUI(options) {
   function handlePointerOver(event) {
     const nextTooltipTarget = getTooltipTarget(event.target);
     if (nextTooltipTarget && !nextTooltipTarget.contains(event.relatedTarget)) {
-      showTooltip(nextTooltipTarget);
+      scheduleTooltip(nextTooltipTarget);
     }
 
     if (event.target.closest && event.target.closest('.pinfix-annotation-sidecar-trigger')) {
@@ -796,11 +799,34 @@ function createUI(options) {
     return target.closest('[data-tooltip]');
   }
 
+  function clearTooltipTimer() {
+    if (tooltipTimer) {
+      window.clearTimeout(tooltipTimer);
+      tooltipTimer = null;
+    }
+  }
+
+  function scheduleTooltip(target) {
+    if (!tooltip || !target || !target.dataset.tooltip) {
+      return;
+    }
+
+    if (tooltipTarget === target && !tooltip.classList.contains('pinfix-hidden')) {
+      return;
+    }
+
+    clearTooltipTimer();
+    tooltipTimer = window.setTimeout(() => {
+      showTooltip(target);
+    }, tooltipHoverDelay);
+  }
+
   function showTooltip(target) {
     if (!tooltip || !target || !target.dataset.tooltip) {
       return;
     }
 
+    clearTooltipTimer();
     tooltipTarget = target;
     tooltip.textContent = target.dataset.tooltip;
     tooltip.classList.remove('pinfix-hidden');
@@ -815,17 +841,23 @@ function createUI(options) {
 
     const targetBox = tooltipTarget.getBoundingClientRect();
     const tooltipBox = tooltip.getBoundingClientRect();
-    const left = clamp(targetBox.right + 10, viewportMargin, window.innerWidth - tooltipBox.width - viewportMargin);
-    const top = clamp(
-      targetBox.top + targetBox.height / 2 - tooltipBox.height / 2,
+    const left = clamp(
+      targetBox.left + targetBox.width / 2 - tooltipBox.width / 2,
       viewportMargin,
-      window.innerHeight - tooltipBox.height - viewportMargin
+      window.innerWidth - tooltipBox.width - viewportMargin
     );
+    const preferredTop = targetBox.bottom + 10;
+    const fallbackTop = targetBox.top - tooltipBox.height - 10;
+    const fitsBelow = preferredTop <= window.innerHeight - tooltipBox.height - viewportMargin;
+    const top = fitsBelow
+      ? preferredTop
+      : clamp(fallbackTop, viewportMargin, window.innerHeight - tooltipBox.height - viewportMargin);
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
   }
 
   function hideTooltip() {
+    clearTooltipTimer();
     tooltipTarget = null;
     if (!tooltip) {
       return;

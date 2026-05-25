@@ -826,17 +826,18 @@ function getPinFixStyles() {
 .pinfix-tooltip {
   position: fixed;
   z-index: 80;
-  max-width: min(220px, calc(100vw - 24px));
-  padding: 7px 9px;
-  border-radius: 999px;
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 8px 10px;
+  border-radius: 12px;
   background: rgba(15, 23, 42, 0.92);
   color: #ffffff;
   font-size: 12px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.35;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
   pointer-events: none;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .pinfix-area-capture-active .pinfix-chrome,

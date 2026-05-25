@@ -1148,23 +1148,12 @@ function createPinFixApp() {
       clearPendingActionConfirm();
       return true;
     }
-
-    const now = Date.now();
-    const confirmed = state.pendingActionConfirm
-      && state.pendingActionConfirm.actionName === actionName
-      && state.pendingActionConfirm.expiresAt > now;
-
-    if (confirmed) {
-      clearPendingActionConfirm();
-      return true;
-    }
-
-    state.pendingActionConfirm = {
-      actionName,
-      expiresAt: now + 5000
-    };
-    showToast(t('reviewContinue', { count: summary.missingCount }));
-    return false;
+    clearPendingActionConfirm();
+    showToast(t('reviewContinue', { count: summary.missingCount }), {
+      duration: 3200,
+      tone: 'warn'
+    });
+    return true;
   }
 
   function setSelectionMode(mode) {
@@ -1247,6 +1236,9 @@ function createPinFixApp() {
     state.areaCaptureActive = true;
     saveGlobalSettings();
     render();
+    showToast('areaCaptureHint', {
+      duration: 2200
+    });
   }
 
   function cancelAreaCapture(messageKey) {

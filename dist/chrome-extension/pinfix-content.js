@@ -248,7 +248,7 @@
           reviewReady: '说明已写完整，可以直接导出',
           reviewMissing: '还有 {count} 个标注没写说明',
           reviewMissingList: '未填写编号：{numbers}',
-          reviewContinue: '还有 {count} 个标注没写说明，再点一次继续',
+          reviewContinue: '还有 {count} 个标注没写说明，已继续复制，请注意补全',
           reviewMasks: '当前遮挡数量：{count}',
           globalNotes: '补充说明',
           globalNotesHint: '写业务逻辑、整体方向或无法绑定到单个编号的说明',
@@ -384,7 +384,7 @@
           reviewReady: 'All annotations have notes. You can export now.',
           reviewMissing: '{count} annotations still need notes.',
           reviewMissingList: 'Missing note numbers: {numbers}',
-          reviewContinue: '{count} annotations still need notes. Click again to continue.',
+          reviewContinue: '{count} annotations still need notes. Copy will continue, but please complete them.',
           reviewMasks: 'Privacy masks on page: {count}',
           globalNotes: 'More notes',
           globalNotesHint: 'Use this for business context, whole-page direction, or notes not tied to one marker.',
@@ -2978,17 +2978,18 @@
     .pinfix-tooltip {
       position: fixed;
       z-index: 80;
-      max-width: min(220px, calc(100vw - 24px));
-      padding: 7px 9px;
-      border-radius: 999px;
+      max-width: min(260px, calc(100vw - 24px));
+      padding: 8px 10px;
+      border-radius: 12px;
       background: rgba(15, 23, 42, 0.92);
       color: #ffffff;
       font-size: 12px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.35;
       box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
       pointer-events: none;
-      white-space: nowrap;
+      white-space: normal;
+      text-align: center;
     }
 
     .pinfix-area-capture-active .pinfix-chrome,
@@ -3707,6 +3708,7 @@
       let sidecar = null;
       let candidate = null;
       let tooltipTarget = null;
+      let tooltipTimer = null;
       let sidecarOpen = false;
       let sidecarLocked = false;
       let sidecarCloseTimer = null;
@@ -3721,6 +3723,7 @@
       let pendingTextSelection = null;
       let pendingGlobalPanelScroll = null;
       const viewportMargin = 12;
+      const tooltipHoverDelay = 420;
 
       function getLanguage() {
         return options.getLanguage();
@@ -3826,6 +3829,7 @@
         }
 
         clearAreaCaptureDraft();
+        clearTooltipTimer();
         cancelSidecarClose();
         clearToolbarDrag();
 
@@ -4423,7 +4427,7 @@
       function handlePointerOver(event) {
         const nextTooltipTarget = getTooltipTarget(event.target);
         if (nextTooltipTarget && !nextTooltipTarget.contains(event.relatedTarget)) {
-          showTooltip(nextTooltipTarget);
+          scheduleTooltip(nextTooltipTarget);
         }
 
         if (event.target.closest && event.target.closest('.pinfix-annotation-sidecar-trigger')) {
@@ -4492,11 +4496,34 @@
         return target.closest('[data-tooltip]');
       }
 
+      function clearTooltipTimer() {
+        if (tooltipTimer) {
+          window.clearTimeout(tooltipTimer);
+          tooltipTimer = null;
+        }
+      }
+
+      function scheduleTooltip(target) {
+        if (!tooltip || !target || !target.dataset.tooltip) {
+          return;
+        }
+
+        if (tooltipTarget === target && !tooltip.classList.contains('pinfix-hidden')) {
+          return;
+        }
+
+        clearTooltipTimer();
+        tooltipTimer = window.setTimeout(() => {
+          showTooltip(target);
+        }, tooltipHoverDelay);
+      }
+
       function showTooltip(target) {
         if (!tooltip || !target || !target.dataset.tooltip) {
           return;
         }
 
+        clearTooltipTimer();
         tooltipTarget = target;
         tooltip.textContent = target.dataset.tooltip;
         tooltip.classList.remove('pinfix-hidden');
@@ -4511,17 +4538,23 @@
 
         const targetBox = tooltipTarget.getBoundingClientRect();
         const tooltipBox = tooltip.getBoundingClientRect();
-        const left = clamp(targetBox.right + 10, viewportMargin, window.innerWidth - tooltipBox.width - viewportMargin);
-        const top = clamp(
-          targetBox.top + targetBox.height / 2 - tooltipBox.height / 2,
+        const left = clamp(
+          targetBox.left + targetBox.width / 2 - tooltipBox.width / 2,
           viewportMargin,
-          window.innerHeight - tooltipBox.height - viewportMargin
+          window.innerWidth - tooltipBox.width - viewportMargin
         );
+        const preferredTop = targetBox.bottom + 10;
+        const fallbackTop = targetBox.top - tooltipBox.height - 10;
+        const fitsBelow = preferredTop <= window.innerHeight - tooltipBox.height - viewportMargin;
+        const top = fitsBelow
+          ? preferredTop
+          : clamp(fallbackTop, viewportMargin, window.innerHeight - tooltipBox.height - viewportMargin);
         tooltip.style.left = `${left}px`;
         tooltip.style.top = `${top}px`;
       }
 
       function hideTooltip() {
+        clearTooltipTimer();
         tooltipTarget = null;
         if (!tooltip) {
           return;
@@ -7194,23 +7227,12 @@
           clearPendingActionConfirm();
           return true;
         }
-
-        const now = Date.now();
-        const confirmed = state.pendingActionConfirm
-          && state.pendingActionConfirm.actionName === actionName
-          && state.pendingActionConfirm.expiresAt > now;
-
-        if (confirmed) {
-          clearPendingActionConfirm();
-          return true;
-        }
-
-        state.pendingActionConfirm = {
-          actionName,
-          expiresAt: now + 5000
-        };
-        showToast(t('reviewContinue', { count: summary.missingCount }));
-        return false;
+        clearPendingActionConfirm();
+        showToast(t('reviewContinue', { count: summary.missingCount }), {
+          duration: 3200,
+          tone: 'warn'
+        });
+        return true;
       }
 
       function setSelectionMode(mode) {
@@ -7293,6 +7315,9 @@
         state.areaCaptureActive = true;
         saveGlobalSettings();
         render();
+        showToast('areaCaptureHint', {
+          duration: 2200
+        });
       }
 
       function cancelAreaCapture(messageKey) {
