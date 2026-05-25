@@ -1272,10 +1272,11 @@ function createUI(options) {
     const toolbar = root.querySelector('.pinfix-toolbar');
     const buttons = [
       { tool: 'select', label: t('select'), icon: iconSvg('select') },
-      { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
       { tool: 'copy', label: t('copy'), icon: iconSvg('copy') },
+      { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
       { action: 'run', name: 'clear-page', label: t('clearAllPageData'), icon: iconSvg('clear') }
     ];
+    const gripDots = new Array(6).fill('<span></span>').join('');
 
     launcher.classList.toggle('pinfix-hidden', state.open);
     launcher.removeAttribute('title');
@@ -1285,14 +1286,14 @@ function createUI(options) {
 
     toolbar.classList.toggle('pinfix-hidden', !state.open);
     toolbar.innerHTML = `
-      <div class="pinfix-toolbar-grip-row">
+      <div class="pinfix-toolbar-header">
         <button
           class="pinfix-toolbar-grip"
           type="button"
           aria-label="${escapeHtml(t('moveToolbar'))}"
           data-tooltip="${escapeHtml(t('moveToolbar'))}"
           data-action="drag-toolbar"
-        ><span></span><span></span></button>
+        ><span class="pinfix-toolbar-grip-mark" aria-hidden="true">${gripDots}</span></button>
         <button
           class="pinfix-toolbar-close"
           type="button"
@@ -1302,37 +1303,39 @@ function createUI(options) {
           data-name="close-pinfix"
         >${iconSvg('close')}</button>
       </div>
-      ${buttons
-      .map((button) => {
-        if (button.action === 'run') {
+      <div class="pinfix-toolbar-grid">
+        ${buttons
+        .map((button) => {
+          if (button.action === 'run') {
+            return `
+              <button
+                class="pinfix-tool-button"
+                type="button"
+                aria-label="${escapeHtml(button.label)}"
+                data-tooltip="${escapeHtml(button.label)}"
+                data-action="run"
+                data-name="${escapeHtml(button.name)}"
+                data-toast-anchor="${escapeHtml(button.name)}"
+              >${button.icon}</button>
+            `;
+          }
+
+          const active = button.tool === 'select'
+            ? state.tool === 'select' && state.selectionActive
+            : button.tool === state.tool || button.tool === state.activePopover;
           return `
             <button
-              class="pinfix-tool-button"
+              class="pinfix-tool-button ${active ? 'is-active' : ''}"
               type="button"
               aria-label="${escapeHtml(button.label)}"
               data-tooltip="${escapeHtml(button.label)}"
-              data-action="run"
-              data-name="${escapeHtml(button.name)}"
-              data-toast-anchor="${escapeHtml(button.name)}"
+              data-action="tool"
+              data-tool="${button.tool}"
             >${button.icon}</button>
           `;
-        }
-
-        const active = button.tool === 'select'
-          ? state.tool === 'select' && state.selectionActive
-          : button.tool === state.tool || button.tool === state.activePopover;
-        return `
-          <button
-            class="pinfix-tool-button ${active ? 'is-active' : ''}"
-            type="button"
-            aria-label="${escapeHtml(button.label)}"
-            data-tooltip="${escapeHtml(button.label)}"
-            data-action="tool"
-            data-tool="${button.tool}"
-          >${button.icon}</button>
-        `;
-      })
-      .join('')}
+        })
+        .join('')}
+      </div>
     `;
     applyChromePosition(state);
   }

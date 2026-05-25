@@ -2199,10 +2199,10 @@ function getPinFixStyles() {
 }
 
 .pinfix-tool-button {
-  border: 1px solid rgba(15, 118, 110, 0.18);
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 251, 249, 0.96));
   color: #0f766e;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(14px);
 }
 
@@ -2248,43 +2248,48 @@ function getPinFixStyles() {
 }
 
 .pinfix-toolbar {
+  --pinfix-toolbar-padding: 9px;
+  --pinfix-toolbar-gap: 8px;
+  --pinfix-toolbar-button-size: 44px;
+  --pinfix-toolbar-header-height: 28px;
+  --pinfix-toolbar-close-size: 28px;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, var(--pinfix-toolbar-button-size)));
+  gap: var(--pinfix-toolbar-gap);
+  width: calc(var(--pinfix-toolbar-padding) * 2 + var(--pinfix-toolbar-button-size) * 2 + var(--pinfix-toolbar-gap));
+  padding: var(--pinfix-toolbar-padding);
+  border-radius: 22px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(15, 118, 110, 0.18);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
   backdrop-filter: blur(14px);
 }
 
-.pinfix-toolbar-grip-row {
+.pinfix-toolbar-header {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr 26px;
-  gap: 6px;
-  min-height: 26px;
-}
-
-.pinfix-toolbar-grip,
-.pinfix-toolbar-close {
-  width: 100%;
-  height: 26px;
-  padding: 0;
-  border: 1px solid rgba(15, 118, 110, 0.18);
-  background: rgba(248, 250, 252, 0.9);
-  color: #0f766e;
-  box-shadow: none;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
+  grid-template-columns: minmax(0, 1fr) var(--pinfix-toolbar-close-size);
+  gap: var(--pinfix-toolbar-gap);
+  align-items: stretch;
 }
 
 .pinfix-toolbar-grip {
-  border-radius: 10px;
+  min-width: 0;
+  height: var(--pinfix-toolbar-header-height);
+  padding: 0 10px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  background: linear-gradient(180deg, rgba(248, 252, 251, 0.98), rgba(238, 249, 246, 0.94));
+  color: #0f766e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
   cursor: grab;
   touch-action: none;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
 .pinfix-toolbar-grip:active,
@@ -2292,29 +2297,52 @@ function getPinFixStyles() {
   cursor: grabbing;
 }
 
-.pinfix-toolbar-grip span {
-  width: 18px;
-  height: 1px;
+.pinfix-toolbar-grip-mark {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  grid-auto-rows: 4px;
+  gap: 5px 6px;
+}
+
+.pinfix-toolbar-grip-mark span {
+  width: 4px;
+  height: 4px;
   border-radius: 999px;
   background: currentColor;
-  opacity: 0.58;
+  opacity: 0.48;
+}
+
+.pinfix-toolbar-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, var(--pinfix-toolbar-button-size)));
+  gap: var(--pinfix-toolbar-gap);
 }
 
 .pinfix-tool-button {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: var(--pinfix-toolbar-button-size);
+  height: var(--pinfix-toolbar-button-size);
+  border-radius: 16px;
   display: grid;
   place-items: center;
   cursor: pointer;
   font-size: 18px;
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .pinfix-toolbar-close {
-  border-radius: 10px;
+  width: var(--pinfix-toolbar-close-size);
+  height: var(--pinfix-toolbar-header-height);
   padding: 0;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 251, 249, 0.96));
+  color: #0f766e;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .pinfix-icon {
@@ -2342,17 +2370,27 @@ function getPinFixStyles() {
 }
 
 .pinfix-tool-button:hover {
-  background: rgba(222, 247, 244, 0.96);
+  background: linear-gradient(180deg, rgba(236, 252, 249, 0.99), rgba(223, 247, 243, 0.97));
+  border-color: rgba(15, 118, 110, 0.24);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
 }
 
 .pinfix-toolbar-grip:hover,
 .pinfix-toolbar-close:hover {
-  background: rgba(222, 247, 244, 0.96);
+  background: linear-gradient(180deg, rgba(236, 252, 249, 0.99), rgba(223, 247, 243, 0.97));
+  border-color: rgba(15, 118, 110, 0.24);
+}
+
+.pinfix-toolbar-grip:hover .pinfix-toolbar-grip-mark span,
+.pinfix-chrome.is-dragging .pinfix-toolbar-grip .pinfix-toolbar-grip-mark span {
+  opacity: 0.72;
 }
 
 .pinfix-tool-button.is-active {
-  background: #0f766e;
+  background: linear-gradient(180deg, #0f766e, #0b5f59);
+  border-color: rgba(15, 118, 110, 0.92);
   color: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 118, 110, 0.28);
 }
 
 #pinfix-root[data-tool-tone="dark"] .pinfix-launcher::before {
@@ -2377,33 +2415,35 @@ function getPinFixStyles() {
 }
 
 #pinfix-root[data-tool-tone="dark"] .pinfix-tool-button {
-  background: rgba(30, 41, 59, 0.9);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.96));
   border-color: rgba(148, 163, 184, 0.28);
   color: #ccfbf1;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
 }
 
 #pinfix-root[data-tool-tone="dark"] .pinfix-tool-button:hover {
-  background: rgba(51, 65, 85, 0.94);
+  background: linear-gradient(180deg, rgba(51, 65, 85, 0.98), rgba(30, 41, 59, 0.96));
   border-color: rgba(94, 234, 212, 0.5);
 }
 
 #pinfix-root[data-tool-tone="dark"] .pinfix-tool-button.is-active {
-  background: #5eead4;
+  background: linear-gradient(180deg, #5eead4, #2dd4bf);
   border-color: rgba(153, 246, 228, 0.92);
   color: #042f2e;
+  box-shadow: 0 14px 30px rgba(45, 212, 191, 0.22);
 }
 
 #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-grip,
 #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-close {
-  background: rgba(15, 23, 42, 0.7);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
   border-color: rgba(148, 163, 184, 0.24);
   color: #ccfbf1;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
 
 #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-grip:hover,
 #pinfix-root[data-tool-tone="dark"] .pinfix-toolbar-close:hover {
-  background: rgba(51, 65, 85, 0.94);
+  background: linear-gradient(180deg, rgba(51, 65, 85, 0.98), rgba(30, 41, 59, 0.96));
   border-color: rgba(94, 234, 212, 0.5);
 }
 
@@ -3520,6 +3560,7 @@ function getPinFixStyles() {
     transform: none;
     flex-direction: row;
     align-items: flex-end;
+    justify-content: flex-start;
   }
 
   .pinfix-launcher {
@@ -3538,34 +3579,28 @@ function getPinFixStyles() {
   }
 
   .pinfix-toolbar {
-    flex-direction: row;
-    flex: 0 1 auto;
+    --pinfix-toolbar-padding: 10px;
+    --pinfix-toolbar-gap: 8px;
+    --pinfix-toolbar-button-size: 46px;
+    --pinfix-toolbar-header-height: 32px;
+    --pinfix-toolbar-close-size: 32px;
+    margin: 0 auto;
     max-width: calc(100vw - 24px);
-    overflow-x: auto;
-    padding: 8px;
-    border-radius: 14px;
-    scrollbar-width: none;
+    border-radius: 20px;
   }
 
-  .pinfix-toolbar-grip-row {
-    flex: 0 0 84px;
-    grid-template-columns: 1fr 34px;
-    min-height: 44px;
+  .pinfix-toolbar-header {
+    gap: var(--pinfix-toolbar-gap);
   }
 
   .pinfix-toolbar-grip,
   .pinfix-toolbar-close {
-    height: 44px;
-  }
-
-  .pinfix-toolbar::-webkit-scrollbar {
-    display: none;
+    height: var(--pinfix-toolbar-header-height);
   }
 
   .pinfix-tool-button {
-    min-width: 44px;
-    width: 44px;
-    height: 44px;
+    width: var(--pinfix-toolbar-button-size);
+    height: var(--pinfix-toolbar-button-size);
   }
 
   .pinfix-toolbar-close {
@@ -3577,9 +3612,9 @@ function getPinFixStyles() {
     left: 12px !important;
     right: 12px;
     top: auto !important;
-    bottom: calc(78px + env(safe-area-inset-bottom));
+    bottom: calc(188px + env(safe-area-inset-bottom));
     width: auto;
-    max-height: min(72vh, calc(100vh - 104px));
+    max-height: min(70vh, calc(100vh - 214px));
   }
 
   .pinfix-note-card {
@@ -3587,9 +3622,9 @@ function getPinFixStyles() {
     left: 12px !important;
     right: 12px;
     top: auto !important;
-    bottom: calc(78px + env(safe-area-inset-bottom));
+    bottom: calc(188px + env(safe-area-inset-bottom));
     width: auto !important;
-    max-height: min(58vh, calc(100vh - 112px));
+    max-height: min(56vh, calc(100vh - 222px));
     overflow: auto;
   }
 
@@ -4907,10 +4942,11 @@ function createUI(options) {
     const toolbar = root.querySelector('.pinfix-toolbar');
     const buttons = [
       { tool: 'select', label: t('select'), icon: iconSvg('select') },
-      { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
       { tool: 'copy', label: t('copy'), icon: iconSvg('copy') },
+      { tool: 'capture', label: t('capture'), icon: iconSvg('capture') },
       { action: 'run', name: 'clear-page', label: t('clearAllPageData'), icon: iconSvg('clear') }
     ];
+    const gripDots = new Array(6).fill('<span></span>').join('');
 
     launcher.classList.toggle('pinfix-hidden', state.open);
     launcher.removeAttribute('title');
@@ -4920,14 +4956,14 @@ function createUI(options) {
 
     toolbar.classList.toggle('pinfix-hidden', !state.open);
     toolbar.innerHTML = `
-      <div class="pinfix-toolbar-grip-row">
+      <div class="pinfix-toolbar-header">
         <button
           class="pinfix-toolbar-grip"
           type="button"
           aria-label="${escapeHtml(t('moveToolbar'))}"
           data-tooltip="${escapeHtml(t('moveToolbar'))}"
           data-action="drag-toolbar"
-        ><span></span><span></span></button>
+        ><span class="pinfix-toolbar-grip-mark" aria-hidden="true">${gripDots}</span></button>
         <button
           class="pinfix-toolbar-close"
           type="button"
@@ -4937,37 +4973,39 @@ function createUI(options) {
           data-name="close-pinfix"
         >${iconSvg('close')}</button>
       </div>
-      ${buttons
-      .map((button) => {
-        if (button.action === 'run') {
+      <div class="pinfix-toolbar-grid">
+        ${buttons
+        .map((button) => {
+          if (button.action === 'run') {
+            return `
+              <button
+                class="pinfix-tool-button"
+                type="button"
+                aria-label="${escapeHtml(button.label)}"
+                data-tooltip="${escapeHtml(button.label)}"
+                data-action="run"
+                data-name="${escapeHtml(button.name)}"
+                data-toast-anchor="${escapeHtml(button.name)}"
+              >${button.icon}</button>
+            `;
+          }
+
+          const active = button.tool === 'select'
+            ? state.tool === 'select' && state.selectionActive
+            : button.tool === state.tool || button.tool === state.activePopover;
           return `
             <button
-              class="pinfix-tool-button"
+              class="pinfix-tool-button ${active ? 'is-active' : ''}"
               type="button"
               aria-label="${escapeHtml(button.label)}"
               data-tooltip="${escapeHtml(button.label)}"
-              data-action="run"
-              data-name="${escapeHtml(button.name)}"
-              data-toast-anchor="${escapeHtml(button.name)}"
+              data-action="tool"
+              data-tool="${button.tool}"
             >${button.icon}</button>
           `;
-        }
-
-        const active = button.tool === 'select'
-          ? state.tool === 'select' && state.selectionActive
-          : button.tool === state.tool || button.tool === state.activePopover;
-        return `
-          <button
-            class="pinfix-tool-button ${active ? 'is-active' : ''}"
-            type="button"
-            aria-label="${escapeHtml(button.label)}"
-            data-tooltip="${escapeHtml(button.label)}"
-            data-action="tool"
-            data-tool="${button.tool}"
-          >${button.icon}</button>
-        `;
-      })
-      .join('')}
+        })
+        .join('')}
+      </div>
     `;
     applyChromePosition(state);
   }
